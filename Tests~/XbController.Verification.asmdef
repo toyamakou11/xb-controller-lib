@@ -1,0 +1,5 @@
+{
+  "name": "XbController.Verification",
+  "references": ["XbController.Runtime", "XbController.Editor", "Unity.InputSystem", "XbController.TestDriver"],
+  "includePlatforms": ["Editor"]
+}

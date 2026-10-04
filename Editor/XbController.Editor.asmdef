@@ -1,0 +1,6 @@
+{
+  "name": "XbController.Editor",
+  "rootNamespace": "XbController.Editor",
+  "references": ["XbController.Runtime", "Unity.InputSystem"],
+  "includePlatforms": ["Editor"]
+}
