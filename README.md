@@ -52,6 +52,8 @@ public sealed class PlayerInputExample : MonoBehaviour
 | `SupportedRumbleMotors` | 公式能力bit: 低周波=1、高周波=2、左trigger=4、右trigger=8。Unity fallback は本体2モーターのみ |
 | `ConnectionId / IsConnected / LastReadError` | 接続単位の識別・有効性・読み取り HRESULT |
 
+Elite Series 2 Core の USB-C では、本体低/高周波と左右 impulse trigger の個別振動・停止をユーザー観測で確認しました（各0.25、700 ms）。無線接続や他機種の保証ではありません。[試験条件と未検証項目](docs/verification.md) を参照してください。
+
 Windows は GameInput を主入力にし、他 OS や初期化失敗時は Unity の標準 Gamepad を使います。Xbox 360/One/Series/Elite を機種番号で決め打ちせず、バックエンドが公開する Gamepad を検出します。Xbox 以外でも Unity/GameInput の標準レイアウトとして認識される端末は対象になります。全機種・全接続を実機検証した意味ではありません。
 
 ## パドルとシステムボタン

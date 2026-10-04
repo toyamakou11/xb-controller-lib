@@ -26,7 +26,7 @@ USB の supportedLayout=0x03ff3fff にはパドルがないが、mapper は4個�
 
 パドル単独・同時と ABXY 操作を記録した。Gamepad と ControllerButton を同じ装置で比較した40秒記録は、双方2569 samples、raw union 0xF、paddle union 0x0。再感知後の30秒記録でも標準ボタン union 0x3C、paddle union 0x0。HRESULT は成功だった。割当先の ABXY が動くことを独立パドル受信と扱わない。Supports(Paddles)=true は metadata であり、この未達を解消する証拠ではない。
 
-プロファイル、firmware、ペアリング、振動を診断から変更していない。参考 SDL fork の別経路は非公開 Windows 構造に依存するため導入していない。
+上記のパドル診断ではプロファイル、firmware、ペアリング、振動を変更していない。後続の振動試験は別項に記録する。参考 SDL fork の別経路は非公開 Windows 構造に依存するため導入していない。
 
 ## 読み取り計測
 
@@ -42,10 +42,16 @@ USB 接続の受信専用 raw probe は1台、motor mask=0xF、inputKinds=0x0104
 
 | 実機モーター | USB-C | Bluetooth / Wireless Adapter |
 | --- | --- | --- |
-| 本体低周波 / 高周波 | metadata 対応、物理応答・停止未検証 | 未検証 |
-| 左 / 右 impulse trigger | metadata 対応、物理応答・停止未検証 | 未検証 |
+| 本体低周波（左） | 所定位置の振動と停止をユーザー確認 | 未検証 |
+| 本体高周波（右） | 所定位置の振動と停止をユーザー確認 | 未検証 |
+| 左 impulse trigger | 所定位置の振動と停止をユーザー確認 | 未検証 |
+| 右 impulse trigger | 所定位置の振動と停止をユーザー確認 | 未検証 |
 
-`Tools/Test-Rumble.ps1` は同じセッション内で接続を選択し、transport を記録する。各モーターを個別に0.25で700 ms出力し、0出力後に位置・他モーターの反応・停止の観測を入力する。対応情報のないモーターは出力せず、finally でも所有出力を停止する。`-ListOnly` は出力を行わず能力を確認する。実機観測はユーザーとの試験待ちである。接続順や別プロセスのtokenを永続IDとして用いない。
+`Tools/Test-Rumble.ps1` は同じセッション内で接続を選択し、transport を記録する。各モーターを個別に0.25で700 ms出力し、0出力後に位置・他モーターの反応・停止の観測を入力する。対応情報のないモーターは出力せず、finally でも所有出力を停止する。`-ListOnly` は出力を行わず能力を確認する。接続順や別プロセスのtokenを永続IDとして用いない。
+
+2026年10月4日の対話式実機試験では、ユーザーの Elite Series 2 Core（確認済み firmware 5.23.6.0）、USB-C、選択セッションの motor mask=0xF を使用した。低周波、高周波、左trigger、右triggerの順で1回ずつ、他チャンネルを0にして0.25 / 700 msの要求を送った。4回すべて要求と停止のHRESULTはS_OK。ユーザーは各回、所定の位置で振動を感じ、その後停止したと回答した。試験プロセスはfinallyの終了処理後にexit 0で終了した。これはAPI成功だけでなくユーザー観測による物理応答の証拠であり、振動強度の計測、他モーターへの機械的な伝達量、同時4出力を検証した意味ではない。
+
+初回試験は入力待ちで履歴が失効した後、正常な最新値への再同期（0x838A0004）を試験スクリプトが致命的エラーと扱い、モーター出力前に中断した。facadeと同じ再同期状態だけを許可する修正後、上記4回の実機試験が成功した。他の負の読み取り結果、失われた接続、非対応モーターの拒否は保持した。DLLとruntimeコードはこの修正で変更していない。
 
 ```powershell
 pwsh -NoProfile -File Tools/Test-Rumble.ps1 -ListOnly
@@ -60,4 +66,4 @@ pwsh -NoProfile -File Tools/Test-Rumble.ps1
 
 Tools/Test-Unity.ps1 -UnityEditor '<installed Editor path>' は専用一時プロジェクトを使い、既存 Unity プロジェクトを変更しない。Tools/Probe-Controller.ps1 -Seconds 30 は接続と変化 snapshot を表示する。SDK と .verification/ の証拠は Git 対象外。
 
-実 rumble、IL2CPP Player、Xbox Wireless Adapter、複数実機 hotplug、他 Xbox 機種、異なる firmware は未検証。Unity import はローカル .verification フォルダー名の警告を出したがコンパイル・Play 検証は成功。GitHub Actions は実行・追加していない。実機独立4パドルを確認するまで Issue を完了せず PR を draft とする。
+振動のBluetooth / Xbox Wireless Adapter、実機でのフォーカス喪失・振動中の切断・終了停止、同時4モーター出力、IL2CPP Player、複数実機 hotplug、他 Xbox 機種、異なる firmware は未検証。振動の所有権・focus・切断・終了の停止条件は合成回帰で確認している。Unity import はローカル .verification フォルダー名の警告を出したがコンパイル・Play 検証は成功。GitHub Actions は実行・追加していない。実機独立4パドルを確認するまで Issue を完了せず PR を draft とする。

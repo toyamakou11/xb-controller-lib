@@ -47,7 +47,9 @@ try {
     $names = @('LowFrequency 本体左','HighFrequency 本体右','LeftTrigger 左トリガー','RightTrigger 右トリガー')
     for ($motor=0; $motor -lt $names.Length; $motor++) {
         $device = @(Read-Controllers | Where-Object Token -eq $selected)
-        if ($device.Count -ne 1 -or $device[0].Error -lt 0) { throw '選択端末の接続・読み取りを確認できません。' }
+        # 履歴失効後の正常な最新値への同期は、facade と同じく有効な状態として扱う。
+        $historyResync = -2088108028 # GAMEINPUT_E_REFERENCE_READING_TOO_OLD (0x838A0004)
+        if ($device.Count -ne 1 -or ($device[0].Error -lt 0 -and $device[0].Error -ne $historyResync)) { throw '選択端末の接続・読み取りを確認できません。' }
         if (($device[0].Rumble -band (1 -shl $motor)) -eq 0) { "$($names[$motor]): metadata 非対応、出力なし"; continue }
         $null = Read-Host ($names[$motor]+' を0.25で700ms試験。Enterで開始、Ctrl+Cで中止')
         $levels = [single[]]::new(4); $levels[$motor] = 0.25

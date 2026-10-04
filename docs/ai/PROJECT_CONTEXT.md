@@ -17,6 +17,6 @@ Replace TODO fields using verified repository evidence. Keep this file short; li
 - Default branch and publication policy: main; focused codex/ branch, Japanese commits and Issue-linked PR; do not merge without authorization; no hosted CI.
 - Authoritative specifications: Official Microsoft SDK header and sources linked in docs/design.md.
 - Confirmed decisions: Design reviewed independently twice before code; native backend required by user's mandatory independent paddles.
-- Open questions / assumptions: Physical rumble awaits coordinated per-motor tests (Tools/Test-Rumble.ps1). Independent paddle acceptance remains unmet: USB mapper exposes all four; raw GIP descriptor says 18 bytes but payload is empty and output metadata is absent. Receive-only Native/raw_probe.cpp rejects that mismatch. No decoder/enable command without validated protocol and hardware receipt. See docs/verification.md.
+- Open questions / assumptions: USB-C physical rumble at 0.25 / 700 ms confirmed by user for all four individual motors and stopping; wireless and physical lifecycle tests remain unverified. Independent paddle acceptance remains unmet: USB mapper exposes all four; raw GIP descriptor says 18 bytes but payload is empty and output metadata is absent. Receive-only Native/raw_probe.cpp rejects that mismatch. No decoder/enable command without validated protocol and hardware receipt. See docs/verification.md.
 
 Use `Not applicable` only with a reason. Update facts when the project changes; do not turn this file into a running transcript.
