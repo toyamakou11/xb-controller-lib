@@ -2,7 +2,7 @@
 
 ## 目的と達成条件
 
-Git URL で追加し、Actions の手動作成なしで標準 Xbox 入力を扱う UPM パッケージ。独立4パドルは必須条件であり、metadata と合成テストを実機達成と扱わない。現時点では実機条件は未達。[検証記録](verification.md) を参照。
+Git URL で追加し、Actions の手動作成なしで標準 Xbox 入力を扱う UPM パッケージ。独立4パドルは必須条件であり、metadata と合成テストを実機達成と扱わない。Bluetooth の独立4パドルと USB-C の4モーター振動を実機確認した。[検証記録](verification.md) を参照。
 
 - Unity 6000.3、Input System 1.19.0 の実 Editor でコンパイル・Play 実行できる。
 - 標準ボタン、軸、押下・解放、接続・切断・無効化・再初期化を扱う。古い参照は中立値。
@@ -13,7 +13,7 @@ Git URL で追加し、Actions の手動作成なしで標準 Xbox 入力を扱�
 
 ## 構成と公開契約
 
-C# facade `Runtime/XboxControllers.cs` はメインスレッド専用の読み取り専用一覧を提供する。Windows x64 は C++17 GameInput v3 bridge、他 OS と初期化失敗時は Unity Gamepad。SDK 3.5.283 を固定検査してビルドし、runtime は黙ってインストールしない。backend は初期化から終了まで固定。別 backend の装置を接続順で合成しない。
+C# facade `Runtime/XboxControllers.cs` はメインスレッド専用の読み取り専用一覧を提供する。Windows x64 は C++20 GameInput v3 bridge と公開 WinRT GATT supplement、他 OS と初期化失敗時は Unity Gamepad。SDK 3.5.283 を固定検査してビルドし、runtime は黙ってインストールしない。backend は初期化から終了まで固定。別 backend の装置を接続順で合成しない。
 
 `XboxButton` は公式の名前付き GameInput 定義に対応する。Unity fallback は意味的な公開 controls を使う。`Supports` は対応 metadata、各 pressed API は受信した状態であり、物理入力の保証とは異なる。スティックは Input System の deadzone 設定を再利用する。
 
@@ -37,15 +37,29 @@ raw buffer は装置の公開 count で接続時のみ確保する。返却 coun
 
 ## 機器の制約と追加調査
 
+### Bluetooth の独立パドル取得
+
+`Native/gatt_paddles.cpp` は MTA worker で公開 WinRT API を使用する。GameInput の `containerId` と paired LE endpoint の `System.Devices.Aep.ContainerId` が一意に一致した場合だけ、公開 metadata の Bluetooth address を取得する。開いた endpoint の ID/address を再検査する。同じ container に複数の接続 token がある場合は拒否する。VID/PID、生 index、機種名、接続順から関連づけない。
+
+vendor service `00000001-5f60-4c4f-9c83-a7953298d40d`、characteristic `00000005-5f60-4c4f-9c83-a7953298d40d`、17-byte payload の byte14/low nibble は [参考実装](https://github.com/hifihedgehog/SDL/blob/feat/hidmaestro-filter/docs/README-xinput-paddles.md) に由来するプロトコル定数である。実機でも長さと独立押下を確認した。byte15 の profile は入力に使わず、firmware whitelist や ABXY 補完は行わない。未知の長さは中立化して診断し、次の有効報告を新しい基準にする。上位 nibble・他フィールドは paddle と解釈しない。
+
+平常の持ち方で、bits `4/8` は左手の上/下、bits `1/2` は右手の上/下と定義する。位置別のユーザー操作と受信値を対照して確認した。SDK の廃止された XboxPaddle1〜4 label 名と SDL の P1〜4 表記は同じ左右規則だと仮定しない。公開 API は `PaddleLeft1/Left2/Right1/Right2` とする。
+
+GameInput と GATT の比較領域を分離し、標準履歴を消費した後で最新パドル値と蓄積 edge を合成する。短い押下/解放は両方を保持する。GATT callback は固定17 bytesをコピーし、mutex 下の固定サイズ accumulator だけを更新する。callback/poll の製品コードは継続的なバッファ確保を行わない。初回 receipt、異常報告後、focus 再同期では欠落 edge を作らない。GameInput 履歴失効で正常な GATT edge を失わない。GATT 障害は標準入力全体を失敗させず、別の診断として返す。
+
+Notify の成功だけで物理対応を認定せず、最初の有効報告後に supplemental state を有効化する。GATT の generation と接続 token で古い callback を拒否する。一時失敗は1〜8秒の backoffで再試行する。CCCD は事前値を記録し、Notify を再登録するが既存 Notify を None に切り替えない。開始前が None の場合だけ、現在値を確認して復元する。CCCD に原子的な所有権 API はなく、他 client との完全な競合保護は保証しない。
+
+非同期 Cancel を完了や rollback と扱わず、terminal まで operation と所有資源を保持する。Shutdown は10秒で完了しなければ失敗を返して worker/context を保持し、再試行する。実行中 worker の detach や DLL 資源の破棄は行わない。旧接続の復元が終わるまで、同じ container の新接続を購読させない。
+
 Elite Series 2 Core は別売4パドルに対応する。トリガーロック・張力調整は追加キーではない。Unity Windows XInput は独立パドルを公開しない。Guide/Share は GameInput system callback と対応情報に従い、Profile/Pair を一般ゲーム入力や Share と見なさない。
 
 USB は mapper と raw label に4パドルを公開したが押下値は0のままだった。SDK の enum 追加は手元の機器・接続の実入力保証ではない。
 
-参考 SDL fork も公式 GameInput のパドル実装を撤回し別経路へ移行した。Bluetooth は vendor GATT UUID と payload、USB は非公開 Windows サービス構造、追加報告命令、OS ファイル版検査に依存する。WGI の SendReceiveMessage 自体は公開 API だが、参考実装の provider と端末の関連づけ・raw 取得は非公開構造を使う。参考文書は firmware 5.23.6.0 の実機試験未実施を明記している。未文書化 offset と機種 ID は取り込んでいない。
+参考 SDL fork も公式 GameInput のパドル実装を撤回し別経路へ移行した。Bluetooth は上記公開 GATT 経路を採用した。USB のサービス構造・OS offset は採用していない。公開 WGI sink の provider 取得には参考実装の非公開 ControllerInitialize COM contract もあるため、別プロセスで評価し、製品実装とは区別する。実機証拠のない USB enable 命令やサービスメモリ読み取りを同梱しない。
 
 SDK 3.5.283 の公開 `GameInputKindRawDeviceReport/GetRawReport` を使う受信専用診断 `Native/raw_probe.cpp` を追加した。同じ公式 device pointer の reading を使い、descriptor の kind/id/size、実データ長、コピー長がすべて一致した場合だけ報告を記録する。公開 metadata で接続時にバッファを確保し、通常捕捉では再利用する。履歴を開始時刻の cutoff と接続ごとの指定時間で制限し、履歴失効・切断を明示する。列挙 callback は捕捉前に mutex 外で解除し、失敗時は捕捉を中断して context をプロセス終了まで保持する。再接続は再実行で新しい attachment として扱う。
 
-公開 raw 出力 API は存在するが、descriptor の ID とサイズだけではパドル有効化命令の framing や状態の意味を確定できない。現在の USB 実機では input descriptor 18 bytes に対し実データ0 bytes、output descriptor 0個だった。値を ABXY から補完せず、decoder と命令送信は実装していない。追加 backend の production 採用には、公開プロトコルの根拠と独立パドルの受信証拠が残る。firmware の完全一致 whitelist や downgrade を条件にしない。
+公開 raw 出力 API は存在するが、descriptor の ID とサイズだけではパドル有効化命令の framing や状態の意味を確定できない。現在の USB 実機では input descriptor 18 bytes に対し実データ0 bytes、output descriptor 0個だった。値を ABXY から補完せず、decoder と命令送信は実装していない。USB の WGI 別 EXE は47-byteの独立入力を受信したが、既存 GameInput への公開 identity 連結を検証した候補では確立できなかったため製品採用していない。firmware の完全一致 whitelist や downgrade を条件にしない。
 
 ## 独立レビューへの対応
 
@@ -62,6 +76,8 @@ raw mapping 設計も実装前に独立レビューし、重複 index、返却 c
 - [公式 raw GIP 受信](https://learn.microsoft.com/en-us/gaming/gdk/docs/reference/input/gameinput/interfaces/igameinputreading/methods/igameinputreading_getrawreport)
 - [公式 raw 出力](https://learn.microsoft.com/en-us/gaming/gdk/docs/reference/input/gameinput/interfaces/igameinputdevice/methods/igameinputdevice_sendrawdeviceoutput)
 - [公開 WGI message API](https://learn.microsoft.com/en-us/uwp/api/windows.gaming.input.custom.gipgamecontrollerprovider.sendreceivemessage)
+- [公開 Bluetooth address API](https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.bluetoothledevice.frombluetoothaddressasync)
+- [公開 CCCD API](https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattcharacteristic.writeclientcharacteristicconfigurationdescriptorasync)
 - [Unity Gamepad](https://docs.unity3d.com/Packages/com.unity.inputsystem@1.19/manual/Gamepad.html)
 - [撤回された GameInput パドル実装](https://github.com/hifihedgehog/SDL/blob/feat/hidmaestro-filter/docs/README-gameinput-paddles.md)
 - [参考実装の別経路](https://github.com/hifihedgehog/SDL/blob/feat/hidmaestro-filter/docs/README-xinput-paddles.md)

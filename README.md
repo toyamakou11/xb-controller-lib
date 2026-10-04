@@ -1,8 +1,8 @@
 # Xbox Controller Library
 
-Unity に Git URL から追加する、Xbox の標準入力と Windows GameInput の独立パドル用 UPM ライブラリです。Input Actions の手動作成は不要です。
+Unity に Git URL から追加する、Xbox の標準入力・振動と Windows の独立パドル用 UPM ライブラリです。Input Actions の手動作成は不要です。
 
-**現在の実機確認では独立4パドルは未達です。** API と対応情報の判定は実装していますが、手元の接続で公開されない物理入力を生成したり、ABXY から推測したりしません。詳細は [検証記録](docs/verification.md) を参照してください。
+**Elite Series 2 Core / firmware 5.23.6.0 の Bluetooth で独立4パドルを実機確認しました。** 公開 WinRT vendor GATT 報告を補完し、単独・同時押下と解放を ABXY と別に扱います。USB-C の4モーター振動も確認済みです。USB の独立パドル補完は製品に同梱していません。他 firmware・他機種の互換性は保証しません。詳細は [検証記録](docs/verification.md) を参照してください。
 
 ## 導入
 
@@ -58,7 +58,7 @@ Windows は GameInput を主入力にし、他 OS や初期化失敗時は Unity
 
 ## パドルとシステムボタン
 
-4パドルの名前は `PaddleLeft1 / PaddleLeft2 / PaddleRight1 / PaddleRight2` です。`Supports(XboxButton.Paddles)` はバックエンドが4個すべての対応情報を公開した場合に true です。これは実際に物理パドルの値が届く保証ではありません。USB 実機では対応情報が true でも独立値が0のままでした。Xbox Accessories で A 等に割り当てた入力だけが見える場合、A とパドルの物理的な区別はできません。プロファイルは自動変更しません。
+4パドルの名前は `PaddleLeft1 / PaddleLeft2 / PaddleRight1 / PaddleRight2` で、1が上、2が下です。`Supports(XboxButton.Paddles)` はバックエンドが4個すべての対応情報を公開した場合に true です。これは実際に物理パドルの値が届く保証ではありません。GameInput 単独の USB 実機では対応情報が true でも独立値が0のままでした。Bluetooth supplement は onboard remap の ABXY と独立パドルを別々に取得します。supplement のない標準入力経路で割当先 A 等だけが見える場合、物理パドルとは区別できません。プロファイルは自動変更しません。
 
 Elite Series 2 Core のトリガーロックやスティック張力調整は機械的な調整であり、追加キーではありません。Profile/Pair はこのライブラリのゲーム入力対象外です。Guide/Share は GameInput の system callback と対応情報が公開する場合に扱いますが、OS が消費する場合があります。Elite の Profile ボタンを Share と見なすことはありません。[Xbox 公式仕様](https://www.xbox.com/en-US/accessories/controllers/xbox-elite-wireless-controller-series-2-core)
 
@@ -85,6 +85,9 @@ pwsh -NoProfile -File Tools/Probe-Controller.ps1
 
 # 同一セッションで端末を明示選択し、モーター別の短い実機試験を行う。
 pwsh -NoProfile -File Tools/Test-Rumble.ps1
+
+# 配布 DLL の独立パドル・標準ボタン・edge を分離して記録する。
+pwsh -NoProfile -File Tools/Test-Paddles.ps1 -Seconds 120
 ```
 
 設計と独立レビューへの対応は [設計文書](docs/design.md)、検証範囲は [検証記録](docs/verification.md) を参照してください。GitHub Actions は使用しません。ライセンスは既存の [GPL](LICENSE)、Microsoft ローダーの表示は [第三者表記](THIRD_PARTY_NOTICES.md) を参照してください。

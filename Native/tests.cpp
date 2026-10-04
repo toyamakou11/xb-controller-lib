@@ -11,6 +11,22 @@ using Microsoft::WRL::RuntimeClassFlags;
 using Microsoft::WRL::ClassicCom;
 using Microsoft::WRL::Make;
 
+// bridge の統合テストは無線端末・WinRT worker を起動しない。
+namespace xb_gatt {
+Sample fixture{};
+HRESULT shutdownResult = S_OK;
+HRESULT Initialize() noexcept { return S_OK; }
+void Attach(std::uint64_t, GUID) noexcept {}
+void Detach(std::uint64_t) noexcept {}
+Sample Poll(std::uint64_t) noexcept {
+    const auto sample = fixture;
+    fixture.pressed = fixture.released = 0;
+    return sample;
+}
+void Resync() noexcept { fixture.pressed = fixture.released = 0; }
+HRESULT Shutdown() noexcept { return shutdownResult; }
+}
+
 namespace {
 void Check(bool condition, const char* name) {
     if (!condition) { std::fprintf(stderr, "FAIL: %s\n", name); std::exit(1); }
@@ -180,12 +196,14 @@ ComPtr<Reading> Sample(std::uint64_t time, GameInputGamepadButtons buttons) {
 
 ComPtr<Input> Setup() {
     Check(xb_shutdown() == S_OK, "fixture shutdown");
+    xb_gatt::fixture = {};
     auto input = Make<Input>();
     context = std::make_unique<Context>();
     context->input = input;
     Device device;
     device.state.token = 42;
     device.state.supported = 0xFFFFFFFFull | xb_guide | xb_share;
+    device.mappedSupported = device.state.supported;
     device.reading = Sample(1, GameInputGamepadNone);
     context->devices.push_back(std::move(device));
     return input;
@@ -471,6 +489,85 @@ int main() {
     Check(xb_shutdown() == S_OK && !context && input->unregisterCalls == 3 && input->unregisterUnlocked,
         "shutdown retry unregisters both callbacks outside mutex");
     Check(xb_shutdown() == S_OK, "shutdown is idempotent");
+
+    input = Setup();
+    xb_gatt::fixture = {4, 4, 0, true, S_OK};
+    input->history = {Sample(2, GameInputGamepadA), Sample(3, GameInputGamepadB)};
+    value = Snapshot();
+    Check(value.buttons == (GameInputGamepadB | GameInputGamepadPaddleLeft1)
+        && value.pressed == (GameInputGamepadA | GameInputGamepadB | GameInputGamepadPaddleLeft1)
+        && value.released == GameInputGamepadA, "GATT and standard edges merge independently");
+    input->history.push_back(Sample(4, GameInputGamepadB));
+    value = Snapshot();
+    Check(value.buttons == (GameInputGamepadB | GameInputGamepadPaddleLeft1)
+        && value.pressed == 0 && value.released == 0, "held GATT paddle has no synthetic edge on standard reading");
+    xb_gatt::fixture = {0, 15, 15, true, S_OK};
+    value = Snapshot();
+    Check((value.pressed & paddles) == paddles && (value.released & paddles) == paddles
+        && !(value.buttons & paddles), "GATT short simultaneous press survives poll");
+    xb_gatt::fixture = {2, 2, 0, true, S_OK};
+    input->tail = GAMEINPUT_E_REFERENCE_READING_TOO_OLD;
+    input->latest = Sample(20, GameInputGamepadNone);
+    value = Snapshot();
+    Check(value.buttons == GameInputGamepadPaddleRight2 && value.pressed == GameInputGamepadPaddleRight2
+        && value.released == 0, "standard history gap preserves valid GATT edge");
+    xb_gatt::fixture = {2, 2, 1, true, S_OK};
+    xb_resync();
+    value = Snapshot();
+    Check(value.buttons == GameInputGamepadPaddleRight2 && value.pressed == 0 && value.released == 0,
+        "focus resync preserves held paddle without guessed edge");
+    xb_gatt::fixture = {0, 0, 0, false, E_FAIL};
+    value = Snapshot(&diagnostic);
+    Check(!(value.buttons & paddles) && !(value.pressed & paddles) && !(value.released & paddles)
+        && diagnostic == E_FAIL, "GATT gap neutralizes only paddle domain with separate diagnostic");
+    xb_gatt::fixture = {15, 15, 0, true, S_OK};
+    input->tail = E_FAIL;
+    value = Snapshot();
+    Check(value.error == E_FAIL && value.buttons == 0 && value.pressed == 0 && value.released == 0,
+        "fatal standard failure cannot publish supplemental state or edges");
+    xb_gatt::shutdownResult = E_FAIL;
+    retained = context.get();
+    Check(xb_shutdown() == E_FAIL && context.get() == retained && context->stopping,
+        "GATT shutdown timeout retains bridge context");
+    xb_gatt::shutdownResult = S_OK;
+    Check(xb_shutdown() == S_OK, "GATT shutdown retry");
+
+    input = Setup();
+    context->devices.clear();
+    auto firstHardware = Make<Hardware>();
+    auto secondHardware = Make<Hardware>();
+    for (auto pairHardware : {firstHardware.Get(), secondHardware.Get()}) {
+        pairHardware->gamepad.supportedLayout = GameInputGamepadA;
+        pairHardware->info.supportedRumbleMotors = GameInputRumbleLowFrequency;
+        DeviceChanged(0, context.get(), pairHardware, 0, GameInputDeviceConnected, GameInputDeviceNoStatus);
+    }
+    Check(context->devices.size() == 2, "two native devices enumerate independently");
+    const auto firstToken = context->devices[0].state.token;
+    const auto secondToken = context->devices[1].state.token;
+    Check(firstToken != secondToken, "native device tokens are distinct");
+    XbSnapshot pair[2]{};
+    Check(xb_poll(pair, 1, &count, &diagnostic) == HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER)
+        && count == 2 && !context->devices[0].reading && !context->devices[1].reading,
+        "capacity negotiation does not consume either device history");
+    auto pairReading = Sample(10, GameInputGamepadA);
+    pairReading->raw.resize(12);
+    input->latest = pairReading;
+    Check(xb_poll(pair, 2, &count, &diagnostic) == S_OK && count == 2
+        && pair[0].token == firstToken && pair[1].token == secondToken
+        && pair[0].buttons == GameInputGamepadA && pair[1].buttons == GameInputGamepadA,
+        "resized native output preserves both device identities");
+    Check(xb_rumble(firstToken, 0.25f, 0, 0, 0) == S_OK && firstHardware->rumbleCalls == 1
+        && secondHardware->rumbleCalls == 0, "output ownership remains device-specific");
+    DeviceChanged(0, context.get(), firstHardware.Get(), 0, GameInputDeviceNoStatus, GameInputDeviceConnected);
+    Check(context->devices.size() == 1 && context->devices[0].state.token == secondToken
+        && firstHardware->stopCalls == 1 && secondHardware->stopCalls == 0,
+        "disconnect neutralizes only owned first device output");
+    Check(xb_rumble(firstToken, 0.25f, 0, 0, 0) == GAMEINPUT_E_DEVICE_NOT_FOUND,
+        "retired native token cannot control a remaining device");
+    DeviceChanged(0, context.get(), firstHardware.Get(), 0, GameInputDeviceConnected, GameInputDeviceNoStatus);
+    Check(context->devices.size() == 2 && context->devices[1].state.token != firstToken
+        && context->devices[1].state.token != secondToken, "reconnection allocates a new native token");
+    Check(xb_shutdown() == S_OK, "multiple native device shutdown");
     std::puts("Native regression tests passed (fake GameInput; no hardware).");
     return 0;
 }

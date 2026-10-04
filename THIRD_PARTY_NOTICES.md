@@ -4,6 +4,8 @@ Windows DLL は Microsoft.GameInput 3.5.283 の `native/src/GameInput.cpp` に�
 
 ローダーの原文表示を以下に保持します。
 
+Bluetooth の vendor UUID と報告の field は [SDL fork の一次実装・文書](https://github.com/hifihedgehog/SDL/blob/feat/hidmaestro-filter/docs/README-xinput-paddles.md) を調査して仕様の根拠を引用しました。配布 GATT module は独自実装であり、この fork のサービスメモリ構造、非公開 offset、USB enable コードは含みません。参考 fork のコードライセンスは zlib で、Microsoft ローダー/runtime の条件とは別です。
+
 ```text
 Copyright (c) Microsoft Corporation.
 

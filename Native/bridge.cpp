@@ -1,4 +1,5 @@
 #include "bridge.h"
+#include "gatt_paddles.h"
 #include <Windows.h>
 #include <GameInput.h>
 #include <wrl/client.h>
@@ -16,6 +17,15 @@ namespace {
 constexpr std::array<GameInputGamepadButtons, 4> paddleButtons{
     GameInputGamepadPaddleLeft1, GameInputGamepadPaddleLeft2,
     GameInputGamepadPaddleRight1, GameInputGamepadPaddleRight2};
+constexpr std::uint32_t paddleMask = GameInputGamepadModulePaddles4;
+// SDL の vendor report は右上・右下・左上・左下の順。SDK の旧 P1 名とは混同しない。
+// https://github.com/hifihedgehog/SDL/blob/feat/hidmaestro-filter/docs/README-xinput-paddles.md
+std::uint32_t PaddleMask(std::uint8_t bits) noexcept {
+    return ((bits & 1) ? GameInputGamepadPaddleRight1 : 0u)
+        | ((bits & 2) ? GameInputGamepadPaddleRight2 : 0u)
+        | ((bits & 4) ? GameInputGamepadPaddleLeft1 : 0u)
+        | ((bits & 8) ? GameInputGamepadPaddleLeft2 : 0u);
+}
 constexpr std::array<GameInputGamepadButtons, 26> standardButtons{
     GameInputGamepadMenu, GameInputGamepadView, GameInputGamepadA, GameInputGamepadB,
     GameInputGamepadX, GameInputGamepadY, GameInputGamepadC, GameInputGamepadZ,
@@ -37,6 +47,8 @@ struct Device {
     std::unique_ptr<bool[]> rawButtons;
     std::uint32_t rawCount{}, rawMask{};
     bool ownsRumble{};
+    bool supplemental{}, suppressPaddleEdges{};
+    std::uint64_t mappedSupported{};
 };
 struct Context {
     ComPtr<IGameInput> input;
@@ -74,6 +86,7 @@ void CALLBACK DeviceChanged(GameInputCallbackToken, void* data, IGameInputDevice
         if (!(current & GameInputDeviceConnected)) {
             if (found != c.devices.end()) {
                 StopOwnedRumble(*found);
+                xb_gatt::Detach(found->state.token);
                 c.devices.erase(found);
             }
             return;
@@ -126,7 +139,11 @@ void CALLBACK DeviceChanged(GameInputCallbackToken, void* data, IGameInputDevice
                 }
             }
         }
+        entry.mappedSupported = entry.state.supported;
+        const auto token = entry.state.token;
+        const auto container = info->containerId;
         c.devices.push_back(std::move(entry));
+        xb_gatt::Attach(token, container);
     } catch (...) {
         std::lock_guard<std::mutex> lock(c.mutex);
         c.callbackError = E_OUTOFMEMORY;
@@ -152,7 +169,7 @@ bool Apply(Device& entry, IGameInputReading* reading, bool edges) noexcept {
     GameInputGamepadState value{};
     if (!reading->GetGamepadState(&value)) return false;
     auto buttons = static_cast<std::uint32_t>(value.buttons) & entry.state.supported;
-    if (!entry.rawMappings.empty()) {
+    if (!entry.supplemental && !entry.rawMappings.empty()) {
         const auto returned = reading->GetControllerButtonState(entry.rawCount, entry.rawButtons.get());
         // 両状態が取得できてから commit する。部分成功で古い値やエッジを残さない。
         buttons &= ~static_cast<std::uint64_t>(entry.rawMask);
@@ -161,9 +178,12 @@ bool Apply(Device& entry, IGameInputReading* reading, bool edges) noexcept {
             if (entry.rawButtons[mapping.index]) buttons |= mapping.mask;
         }
     }
+    if (entry.supplemental) buttons &= ~static_cast<std::uint64_t>(paddleMask);
     if (edges) {
-        entry.state.pressed |= buttons & ~entry.state.buttons;
-        entry.state.released |= entry.state.buttons & ~buttons & 0xFFFFFFFFull;
+        const auto compare = entry.supplemental || entry.suppressPaddleEdges
+            ? (0xFFFFFFFFull & ~static_cast<std::uint64_t>(paddleMask)) : 0xFFFFFFFFull;
+        entry.state.pressed |= buttons & ~entry.state.buttons & compare;
+        entry.state.released |= entry.state.buttons & ~buttons & compare;
     }
     entry.state.buttons = buttons;
     entry.state.timestamp = reading->GetTimestamp();
@@ -238,6 +258,8 @@ std::int32_t __cdecl xb_initialize(std::uint32_t version, std::uint32_t size) no
         auto& c = *context;
         auto hr = GameInputCreate(&c.input);
         if (FAILED(hr)) { context.reset(); return hr; }
+        hr = xb_gatt::Initialize();
+        if (FAILED(hr)) c.callbackError = hr;
         // 接続列挙をフォーカスから分離する。ゲームへの公開は C# 側でフォーカスを守る。
         c.input->SetFocusPolicy(GameInputEnableBackgroundInput);
         // blocking enumeration は callback を呼ぶため、ここで mutex を取得しない。
@@ -259,6 +281,8 @@ std::int32_t __cdecl xb_shutdown() noexcept {
         // callback 解除失敗でも、所有する出力を先に停止する。
         for (auto& entry : c.devices) StopOwnedRumble(entry);
     }
+    const auto gattResult = xb_gatt::Shutdown();
+    if (FAILED(gattResult)) return gattResult;
     // 解除の待機中に mutex を保持しない。失敗時は callback の資源を保持する。
     if (c.deviceCallback && !c.input->UnregisterCallback(c.deviceCallback)) return E_FAIL;
     c.deviceCallback = 0;
@@ -280,8 +304,23 @@ std::int32_t __cdecl xb_poll(XbSnapshot* buffer, std::uint32_t capacity, std::ui
     if (capacity < *count) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
     const auto cutoff = c.input->GetCurrentTimestamp();
     for (std::uint32_t i = 0; i < *count; ++i) {
-        Poll(c, c.devices[i], cutoff);
-        buffer[i] = c.devices[i].state;
+        auto& entry = c.devices[i];
+        const auto sample = xb_gatt::Poll(entry.state.token);
+        entry.suppressPaddleEdges = entry.supplemental != sample.received;
+        entry.supplemental = sample.received;
+        entry.state.supported = entry.mappedSupported | (sample.received ? paddleMask : 0u);
+        if (sample.received || entry.suppressPaddleEdges)
+            entry.state.buttons &= ~static_cast<std::uint64_t>(paddleMask);
+        Poll(c, entry, cutoff);
+        // 標準履歴の再同期と GATT の edge は独立。致命的な標準読み取り失敗は全入力を中立化する。
+        if (sample.received && (SUCCEEDED(entry.state.error) || entry.state.error == GAMEINPUT_E_REFERENCE_READING_TOO_OLD)) {
+            entry.state.buttons |= PaddleMask(sample.buttons);
+            entry.state.pressed |= PaddleMask(sample.pressed);
+            entry.state.released |= PaddleMask(sample.released);
+        }
+        if (FAILED(sample.error) && SUCCEEDED(*diagnostic)) *diagnostic = sample.error;
+        entry.suppressPaddleEdges = false;
+        buffer[i] = entry.state;
     }
     // callback 診断は正常な既存端末の読み取りを止めない。
     return S_OK;
@@ -314,6 +353,7 @@ std::int32_t __cdecl xb_rumble(std::uint64_t token, float low, float high, float
 void __cdecl xb_resync() noexcept {
     if (!context) return;
     std::lock_guard<std::mutex> lock(context->mutex);
+    xb_gatt::Resync();
     for (auto& entry : context->devices) {
         Neutral(entry, S_OK);
         entry.systemPressed = entry.systemReleased = 0;
