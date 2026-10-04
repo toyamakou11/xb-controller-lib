@@ -48,7 +48,8 @@ public sealed class PlayerInputExample : MonoBehaviour
 | `Supports / SupportedButtons` | 端末が公開する対応情報。未押下とは別 |
 | `IsPressed / WasPressed / WasReleased` | 現在値と選択された Input System 更新単位のエッジ |
 | `LeftStick / RightStick / Dpad / LeftTrigger / RightTrigger` | 正規化された軸。スティックは Input System 設定のデッドゾーン |
-| `SetRumble(low, high, leftTrigger, rightTrigger)` | 対応モーターへ要求。失敗時 false。値は0〜1に制限 |
+| `SetRumble(low, high, leftTrigger, rightTrigger)` | 本体低/高周波、左右 impulse trigger へ要求。有限値を0〜1に制限。true は送信受付であり実機応答の保証ではない |
+| `SupportedRumbleMotors` | 公式能力bit: 低周波=1、高周波=2、左trigger=4、右trigger=8。Unity fallback は本体2モーターのみ |
 | `ConnectionId / IsConnected / LastReadError` | 接続単位の識別・有効性・読み取り HRESULT |
 
 Windows は GameInput を主入力にし、他 OS や初期化失敗時は Unity の標準 Gamepad を使います。Xbox 360/One/Series/Elite を機種番号で決め打ちせず、バックエンドが公開する Gamepad を検出します。Xbox 以外でも Unity/GameInput の標準レイアウトとして認識される端末は対象になります。全機種・全接続を実機検証した意味ではありません。
@@ -64,7 +65,7 @@ Elite Series 2 Core のトリガーロックやスティック張力調整は機
 - 通常は初期化不要です。バックエンドを明示選択する場合、初回読み取り前に `XboxControllers.Initialize(ControllerBackend.UnityInputSystem)` を呼びます。途中切り替えは `Shutdown()` の後に再初期化します。
 - 入力エッジは Dynamic/Fixed/Manual の選択された更新単位です。同じ更新内の短い押下と解放を GameInput 履歴から蓄積します。履歴失効時は最新値へ同期し、失われたエッジを推測しません。`LastReadError=0x838A0004` はこの再同期を示します。
 - 切断・無効化・再初期化後の古い参照は中立値を返します。再接続時は新参照です。`ConnectionId` を永続的な機種IDやプレイヤー番号に使わないでください。
-- フォーカス喪失と終了では、このライブラリが開始した振動を停止します。復帰後の自動振動再開はありません。
+- フォーカス喪失・切断・nativeの致命的読み取り失敗・終了では、このライブラリが開始した振動を停止します。復帰後の自動振動再開はありません。出力は公開能力に従い、各接続での実機応答は別途試験が必要です。
 - 接続列挙の安定性のため GameInput インスタンスは背景入力を許可しますが、ゲームへの読み取りは Unity のフォーカス状態で制限します。Editor の非 Play 診断では接続状態を表示します。
 - Unity 自体の Gamepad は削除しません。同一ゲーム操作にこの API と別の XInput/PlayerInput を重ねると二重処理になるため、入力の呼び出し元を統一してください。
 
@@ -79,6 +80,9 @@ pwsh -NoProfile -File Tools/Test-Unity.ps1 -UnityEditor '<Unity Editor の絶対
 
 # プロファイルと振動を変更せず対応情報を確認する。
 pwsh -NoProfile -File Tools/Probe-Controller.ps1
+
+# 同一セッションで端末を明示選択し、モーター別の短い実機試験を行う。
+pwsh -NoProfile -File Tools/Test-Rumble.ps1
 ```
 
 設計と独立レビューへの対応は [設計文書](docs/design.md)、検証範囲は [検証記録](docs/verification.md) を参照してください。GitHub Actions は使用しません。ライセンスは既存の [GPL](LICENSE)、Microsoft ローダーの表示は [第三者表記](THIRD_PARTY_NOTICES.md) を参照してください。

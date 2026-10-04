@@ -50,6 +50,12 @@ struct Context {
 std::unique_ptr<Context> context;
 std::uint64_t nextToken = 1;
 
+void StopOwnedRumble(Device& entry) noexcept {
+    if (!entry.ownsRumble) return;
+    entry.device->SetRumbleState(nullptr);
+    entry.ownsRumble = false;
+}
+
 std::uint64_t SystemMask(GameInputSystemButtons buttons) noexcept {
     std::uint64_t result{};
     if (buttons & GameInputSystemButtonGuide) result |= xb_guide;
@@ -66,7 +72,10 @@ void CALLBACK DeviceChanged(GameInputCallbackToken, void* data, IGameInputDevice
         auto found = std::find_if(c.devices.begin(), c.devices.end(),
             [device](const Device& value) { return value.device.Get() == device; });
         if (!(current & GameInputDeviceConnected)) {
-            if (found != c.devices.end()) c.devices.erase(found);
+            if (found != c.devices.end()) {
+                StopOwnedRumble(*found);
+                c.devices.erase(found);
+            }
             return;
         }
         if (found != c.devices.end()) return;
@@ -169,6 +178,7 @@ bool Apply(Device& entry, IGameInputReading* reading, bool edges) noexcept {
 }
 
 void Neutral(Device& entry, HRESULT error) noexcept {
+    if (FAILED(error)) StopOwnedRumble(entry);
     const auto token = entry.state.token;
     const auto supported = entry.state.supported;
     const auto rumble = entry.state.rumble;
@@ -246,13 +256,14 @@ std::int32_t __cdecl xb_shutdown() noexcept {
     {
         std::lock_guard<std::mutex> lock(c.mutex);
         c.stopping = true;
+        // callback 解除失敗でも、所有する出力を先に停止する。
+        for (auto& entry : c.devices) StopOwnedRumble(entry);
     }
     // 解除の待機中に mutex を保持しない。失敗時は callback の資源を保持する。
     if (c.deviceCallback && !c.input->UnregisterCallback(c.deviceCallback)) return E_FAIL;
     c.deviceCallback = 0;
     if (c.systemCallback && !c.input->UnregisterCallback(c.systemCallback)) return E_FAIL;
     c.systemCallback = 0;
-    for (auto& entry : c.devices) if (entry.ownsRumble) entry.device->SetRumbleState(nullptr);
     context.reset();
     return S_OK;
 }
@@ -282,11 +293,17 @@ std::int32_t __cdecl xb_rumble(std::uint64_t token, float low, float high, float
     std::lock_guard<std::mutex> lock(context->mutex);
     for (auto& entry : context->devices) {
         if (entry.state.token != token) continue;
-        const float values[] = {low, high, left, right};
-        for (unsigned i = 0; i < 4; ++i)
-            if (values[i] != 0 && !(entry.state.rumble & (1u << i))) return GAMEINPUT_E_FEEDBACK_NOT_SUPPORTED;
+        if (!(entry.device->GetDeviceStatus() & GameInputDeviceConnected)) {
+            StopOwnedRumble(entry);
+            return GAMEINPUT_E_DEVICE_NOT_FOUND;
+        }
         GameInputRumbleParams params{std::clamp(low, 0.0f, 1.0f), std::clamp(high, 0.0f, 1.0f),
             std::clamp(left, 0.0f, 1.0f), std::clamp(right, 0.0f, 1.0f)};
+        const float values[] = {params.lowFrequency, params.highFrequency, params.leftTrigger, params.rightTrigger};
+        constexpr GameInputRumbleMotors motors[] = {GameInputRumbleLowFrequency, GameInputRumbleHighFrequency,
+            GameInputRumbleLeftTrigger, GameInputRumbleRightTrigger};
+        for (unsigned i = 0; i < 4; ++i)
+            if (values[i] != 0 && !(entry.state.rumble & motors[i])) return GAMEINPUT_E_FEEDBACK_NOT_SUPPORTED;
         entry.device->SetRumbleState(&params);
         entry.ownsRumble = params.lowFrequency || params.highFrequency || params.leftTrigger || params.rightTrigger;
         return S_OK;

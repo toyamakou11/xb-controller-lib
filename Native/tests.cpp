@@ -1,7 +1,10 @@
 #include "bridge.cpp"
+#define XB_RAW_PROBE_TEST
+#include "raw_probe.cpp"
 #include <wrl/implements.h>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 
 using Microsoft::WRL::RuntimeClass;
 using Microsoft::WRL::RuntimeClassFlags;
@@ -19,6 +22,7 @@ public:
     GameInputGamepadState state{};
     std::vector<unsigned char> raw;
     bool valid{true};
+    ComPtr<IGameInputRawDeviceReport> report;
     GameInputKind STDMETHODCALLTYPE GetInputKind() override { return GameInputKindGamepad; }
     std::uint64_t STDMETHODCALLTYPE GetTimestamp() override { return timestamp; }
     void STDMETHODCALLTYPE GetDevice(IGameInputDevice** output) override { *output = nullptr; }
@@ -40,7 +44,9 @@ public:
     bool STDMETHODCALLTYPE GetFlightStickState(GameInputFlightStickState*) override { return false; }
     bool STDMETHODCALLTYPE GetGamepadState(GameInputGamepadState* output) override { *output = state; return valid; }
     bool STDMETHODCALLTYPE GetRacingWheelState(GameInputRacingWheelState*) override { return false; }
-    bool STDMETHODCALLTYPE GetRawReport(IGameInputRawDeviceReport** output) override { *output = nullptr; return false; }
+    bool STDMETHODCALLTYPE GetRawReport(IGameInputRawDeviceReport** output) override {
+        report.CopyTo(output); return report != nullptr;
+    }
 };
 
 class Input final : public RuntimeClass<RuntimeClassFlags<ClassicCom>, IGameInput> {
@@ -73,6 +79,8 @@ public:
     void STDMETHODCALLTYPE StopCallback(GameInputCallbackToken) override {}
     bool STDMETHODCALLTYPE UnregisterCallback(GameInputCallbackToken) override {
         ++unregisterCalls;
+        for (const auto& device : context->devices)
+            Check(!device.ownsRumble, "owned output stopped before callback unregister");
         if (context->mutex.try_lock()) context->mutex.unlock();
         else unregisterUnlocked = false;
         return unregisterSucceeds;
@@ -107,6 +115,9 @@ public:
 
 class Hardware final : public RuntimeClass<RuntimeClassFlags<ClassicCom>, IGameInputDevice> {
 public:
+    GameInputDeviceStatus status{GameInputDeviceConnected};
+    GameInputRumbleParams lastRumble{};
+    unsigned rumbleCalls{}, stopCalls{};
     GameInputDeviceInfo info{};
     GameInputGamepadInfo gamepad{};
     GameInputControllerInfo controller{};
@@ -124,11 +135,15 @@ public:
     }
     HRESULT STDMETHODCALLTYPE GetDeviceInfo(const GameInputDeviceInfo** output) override { *output = &info; return S_OK; }
     HRESULT STDMETHODCALLTYPE GetHapticInfo(GameInputHapticInfo*) override { return E_NOTIMPL; }
-    GameInputDeviceStatus STDMETHODCALLTYPE GetDeviceStatus() override { return GameInputDeviceConnected; }
+    GameInputDeviceStatus STDMETHODCALLTYPE GetDeviceStatus() override { return status; }
     HRESULT STDMETHODCALLTYPE CreateForceFeedbackEffect(std::uint32_t, const GameInputForceFeedbackParams*, IGameInputForceFeedbackEffect**) override { return E_NOTIMPL; }
     bool STDMETHODCALLTYPE IsForceFeedbackMotorPoweredOn(std::uint32_t) override { return false; }
     void STDMETHODCALLTYPE SetForceFeedbackMotorGain(std::uint32_t, float) override {}
-    void STDMETHODCALLTYPE SetRumbleState(const GameInputRumbleParams*) override {}
+    void STDMETHODCALLTYPE SetRumbleState(const GameInputRumbleParams* params) override {
+        ++rumbleCalls;
+        lastRumble = params ? *params : GameInputRumbleParams{};
+        if (!params || !(params->lowFrequency || params->highFrequency || params->leftTrigger || params->rightTrigger)) ++stopCalls;
+    }
     HRESULT STDMETHODCALLTYPE DirectInputEscape(std::uint32_t, const void*, std::uint32_t, void*, std::uint32_t, std::uint32_t*) override { return E_NOTIMPL; }
     HRESULT STDMETHODCALLTYPE CreateInputMapper(IGameInputMapper** output) override { return mapper.CopyTo(output); }
     HRESULT STDMETHODCALLTYPE GetExtraAxisCount(GameInputKind, std::uint32_t*) override { return E_NOTIMPL; }
@@ -137,6 +152,23 @@ public:
     HRESULT STDMETHODCALLTYPE GetExtraButtonIndexes(GameInputKind, std::uint32_t, std::uint8_t*) override { return E_NOTIMPL; }
     HRESULT STDMETHODCALLTYPE CreateRawDeviceReport(std::uint32_t, GameInputRawDeviceReportKind, IGameInputRawDeviceReport**) override { return E_NOTIMPL; }
     HRESULT STDMETHODCALLTYPE SendRawDeviceOutput(IGameInputRawDeviceReport*) override { return E_NOTIMPL; }
+};
+
+class RawReport final : public RuntimeClass<RuntimeClassFlags<ClassicCom>, IGameInputRawDeviceReport> {
+public:
+    GameInputRawDeviceReportInfo info{GameInputRawInputReport, 7, 3};
+    std::vector<unsigned char> bytes{0x10, 0x20, 0x30};
+    bool shortCopy{};
+    void STDMETHODCALLTYPE GetDevice(IGameInputDevice** output) override { *output = nullptr; }
+    void STDMETHODCALLTYPE GetReportInfo(GameInputRawDeviceReportInfo* output) override { *output = info; }
+    size_t STDMETHODCALLTYPE GetRawDataSize() override { return bytes.size(); }
+    size_t STDMETHODCALLTYPE GetRawData(size_t capacity, void* output) override {
+        auto length = std::min(capacity, bytes.size());
+        if (shortCopy && length) --length;
+        std::copy_n(bytes.data(), length, static_cast<unsigned char*>(output));
+        return length;
+    }
+    bool STDMETHODCALLTYPE SetRawData(size_t, const void*) override { return false; }
 };
 
 ComPtr<Reading> Sample(std::uint64_t time, GameInputGamepadButtons buttons) {
@@ -191,6 +223,25 @@ ComPtr<Reading> RawSample(std::uint64_t time, GameInputGamepadButtons gamepad, u
 }
 
 int main() {
+    auto rawReading = Make<Reading>();
+    auto rawReport = Make<RawReport>();
+    rawReading->report = rawReport;
+    Report descriptor; descriptor.info = rawReport->info;
+    descriptor.bytes.resize(3); descriptor.previous.resize(3);
+    std::vector<Report> descriptors{descriptor};
+    Check(Receive(rawReading.Get(), descriptors, 0) && descriptors[0].received &&
+        descriptors[0].previous == rawReport->bytes, "raw exact receipt accepted without paddle inference");
+    descriptors[0].received = false;
+    rawReport->bytes.clear();
+    Check(!Receive(rawReading.Get(), descriptors, 0) && !descriptors[0].received, "raw empty payload rejected despite nonzero descriptor");
+    rawReport->bytes = {0x10, 0x20, 0x30}; rawReport->shortCopy = true;
+    Check(!Receive(rawReading.Get(), descriptors, 0) && !descriptors[0].received, "raw partial copy never commits receipt");
+    rawReport->shortCopy = false; rawReport->info.id++;
+    Check(!Receive(rawReading.Get(), descriptors, 0), "unknown report id rejected");
+    rawReport->info.id--; rawReport->info.kind = GameInputRawOutputReport;
+    Check(!Receive(rawReading.Get(), descriptors, 0), "output report cannot masquerade as input");
+    rawReading->report.Reset();
+    Check(!Receive(rawReading.Get(), descriptors, 0), "missing report rejected");
     Check(xb_initialize(xb_abi_version + 1, sizeof(XbSnapshot)) == E_INVALIDARG, "ABI version rejection");
     Check(xb_initialize(xb_abi_version, sizeof(XbSnapshot) - 1) == E_INVALIDARG, "ABI size rejection");
     std::uint32_t count = 9;
@@ -199,6 +250,79 @@ int main() {
     Check(xb_poll(nullptr, 1, &count, &diagnostic) == E_INVALIDARG, "null output rejection");
 
     auto input = Setup();
+    auto rumbleHardware = Make<Hardware>();
+    context->devices[0].device = rumbleHardware;
+    context->devices[0].state.rumble = GameInputRumbleLowFrequency | GameInputRumbleHighFrequency |
+        GameInputRumbleLeftTrigger | GameInputRumbleRightTrigger;
+    Check(xb_rumble(42, 0.1f, 0.2f, 0.3f, 0.4f) == S_OK &&
+        rumbleHardware->lastRumble.lowFrequency == 0.1f && rumbleHardware->lastRumble.highFrequency == 0.2f &&
+        rumbleHardware->lastRumble.leftTrigger == 0.3f && rumbleHardware->lastRumble.rightTrigger == 0.4f,
+        "four motor parameters retain official semantics");
+    const auto writes = rumbleHardware->rumbleCalls;
+    Check(xb_rumble(42, std::numeric_limits<float>::quiet_NaN(), 0, 0, 0) == E_INVALIDARG &&
+        xb_rumble(42, 0, std::numeric_limits<float>::infinity(), 0, 0) == E_INVALIDARG &&
+        xb_rumble(99, 1, 0, 0, 0) == GAMEINPUT_E_DEVICE_NOT_FOUND && rumbleHardware->rumbleCalls == writes,
+        "invalid values and stale tokens do not write");
+    for (std::uint32_t mask = 0; mask < 16; ++mask) {
+        context->devices[0].state.rumble = mask;
+        for (unsigned motor = 0; motor < 4; ++motor) {
+            float levels[4]{}; levels[motor] = 0.25f;
+            auto before = rumbleHardware->rumbleCalls;
+            auto result = xb_rumble(42, levels[0], levels[1], levels[2], levels[3]);
+            Check((mask & (1u << motor)) ? result == S_OK && rumbleHardware->rumbleCalls == before + 1 :
+                result == GAMEINPUT_E_FEEDBACK_NOT_SUPPORTED && rumbleHardware->rumbleCalls == before,
+                "every motor capability combination is enforced");
+        }
+    }
+    context->devices[0].state.rumble = GameInputRumbleLowFrequency;
+    Check(xb_rumble(42, 2, -1, -2, -3) == S_OK && rumbleHardware->lastRumble.lowFrequency == 1 &&
+        rumbleHardware->lastRumble.highFrequency == 0 && rumbleHardware->lastRumble.leftTrigger == 0 &&
+        rumbleHardware->lastRumble.rightTrigger == 0, "clamp precedes unsupported motor validation");
+    Check(xb_rumble(42, 0, 1, 0, 0) == GAMEINPUT_E_FEEDBACK_NOT_SUPPORTED && context->devices[0].ownsRumble,
+        "rejected request preserves owned output");
+    xb_resync();
+    Check(context->devices[0].ownsRumble, "focus resync itself preserves rumble ownership");
+    input->latest = Sample(5, GameInputGamepadNone);
+    Snapshot();
+    Check(context->devices[0].ownsRumble, "benign read preserves rumble");
+    input->tail = GAMEINPUT_E_REFERENCE_READING_TOO_OLD;
+    input->latest = Sample(8, GameInputGamepadNone);
+    Snapshot();
+    Check(context->devices[0].ownsRumble && rumbleHardware->stopCalls == 0,
+        "successful history resync preserves owned output");
+    input->latest.Reset();
+    Snapshot();
+    Check(!context->devices[0].ownsRumble && rumbleHardware->stopCalls == 1,
+        "failed history resync stops output exactly once");
+    input->tail = E_FAIL;
+    Snapshot();
+    Check(!context->devices[0].ownsRumble && rumbleHardware->stopCalls == 1, "fatal read stops owned output");
+    Check(xb_rumble(42, 1, 0, 0, 0) == S_OK, "restart only by explicit valid request");
+    rumbleHardware->status = GameInputDeviceNoStatus;
+    Check(xb_rumble(42, 1, 0, 0, 0) == GAMEINPUT_E_DEVICE_NOT_FOUND && !context->devices[0].ownsRumble,
+        "live disconnect status rejects output before delayed callback");
+    rumbleHardware->status = GameInputDeviceConnected;
+    Check(xb_rumble(42, 1, 0, 0, 0) == S_OK, "connected output");
+    DeviceChanged(0, context.get(), rumbleHardware.Get(), 0, GameInputDeviceNoStatus, GameInputDeviceConnected);
+    Check(context->devices.empty() && rumbleHardware->stopCalls == 3, "disconnect stops before erasing ownership");
+    Check(xb_shutdown() == S_OK, "empty rumble fixture shutdown");
+
+    input = Setup();
+    context->devices[0].device = rumbleHardware;
+    auto stops = rumbleHardware->stopCalls;
+    Check(xb_shutdown() == S_OK && rumbleHardware->stopCalls == stops, "unowned output is untouched");
+    input = Setup();
+    context->devices[0].device = rumbleHardware;
+    context->devices[0].state.rumble = GameInputRumbleLowFrequency;
+    Check(xb_rumble(42, 1, 0, 0, 0) == S_OK, "owned shutdown fixture");
+    context->deviceCallback = 11;
+    input->unregisterSucceeds = false;
+    Check(xb_shutdown() == E_FAIL && rumbleHardware->stopCalls == stops + 1 && !context->devices[0].ownsRumble,
+        "failed unregister already stopped owned output");
+    input->unregisterSucceeds = true;
+    Check(xb_shutdown() == S_OK && rumbleHardware->stopCalls == stops + 1, "shutdown retry does not repeat stop");
+
+    input = Setup();
     input->history = {Sample(2, GameInputGamepadPaddleLeft1), Sample(3, GameInputGamepadNone)};
     auto value = Snapshot();
     Check(value.buttons == 0 && value.pressed == GameInputGamepadPaddleLeft1 && value.released == GameInputGamepadPaddleLeft1,

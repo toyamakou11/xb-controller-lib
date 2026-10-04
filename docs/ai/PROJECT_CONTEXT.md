@@ -9,7 +9,7 @@ Replace TODO fields using verified repository evidence. Keep this file short; li
 - Architecture and entry points: Runtime/XboxControllers.cs and Native/bridge.cpp; Editor auto setup and diagnostics.
 - Public interfaces and data invariants: Read-only controller list; supported capability separate from pressed state; invalid references read neutral; ABI v1 pack 8, 80 bytes.
 - Build command: Tools/Build-Native.ps1; CMake + MSVC /W4 /WX and CTest.
-- Unit / regression test command: Tools/Test-Unity.ps1 -UnityEditor '<installed Editor path>'; actual Play verification, 99 assertions passed.
+- Unit / regression test command: Tools/Test-Unity.ps1 -UnityEditor '<installed Editor path>'; actual Play verification, 108 assertions passed.
 - Lint / type-check command: MSVC /W4 /WX and actual Unity script compilation.
 - Integration / visual verification and prerequisites: Unity 6000.3.20f1; Elite Series 2 Core tested over Bluetooth and USB-C; approved GameInput 3.5.283 runtime installed.
 - Performance-sensitive paths and benchmark command: Cached public reads measured by Unity runner in 5 trials with zero managed allocations; fixture differences preclude relative speed claims.
@@ -17,6 +17,6 @@ Replace TODO fields using verified repository evidence. Keep this file short; li
 - Default branch and publication policy: main; focused codex/ branch, Japanese commits and Issue-linked PR; do not merge without authorization; no hosted CI.
 - Authoritative specifications: Official Microsoft SDK header and sources linked in docs/design.md.
 - Confirmed decisions: Design reviewed independently twice before code; native backend required by user's mandatory independent paddles.
-- Open questions / assumptions: Independent paddle acceptance remains unmet: USB mapper exposes all four but physical values stayed zero. Do not claim hardware completion or adopt undocumented service offsets without revisiting design. See docs/verification.md.
+- Open questions / assumptions: Physical rumble awaits coordinated per-motor tests (Tools/Test-Rumble.ps1). Independent paddle acceptance remains unmet: USB mapper exposes all four; raw GIP descriptor says 18 bytes but payload is empty and output metadata is absent. Receive-only Native/raw_probe.cpp rejects that mismatch. No decoder/enable command without validated protocol and hardware receipt. See docs/verification.md.
 
 Use `Not applicable` only with a reason. Update facts when the project changes; do not turn this file into a running transcript.

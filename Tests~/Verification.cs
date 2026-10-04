@@ -12,6 +12,16 @@ using Debug = UnityEngine.Debug;
 
 namespace XbController.Verification
 {
+    public sealed class RecordingGamepad : Gamepad
+    {
+        public int MotorCalls;
+        public float Low, High;
+        public override void SetMotorSpeeds(float lowFrequency, float highFrequency)
+        {
+            MotorCalls++; Low = lowFrequency; High = highFrequency;
+        }
+    }
+
     [InitializeOnLoad]
     public static class Verification
     {
@@ -66,6 +76,32 @@ namespace XbController.Verification
                 Application.runInBackground = true;
                 XboxControllers.Initialize(ControllerBackend.UnityInputSystem);
                 typeof(XboxControllers).GetMethod("FocusChanged", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { true });
+                InputSystem.RegisterLayout<RecordingGamepad>();
+                var rumbleDevice = InputSystem.AddDevice<RecordingGamepad>();
+                Controller rumble = null;
+                foreach (var item in XboxControllers.All) if (item.UnityDevice == rumbleDevice) rumble = item;
+                Check(rumble != null && rumble.SupportedRumbleMotors == 3, "Unity 振動能力");
+                int motorCalls = rumbleDevice.MotorCalls;
+                rumble.StopRumble();
+                Check(rumbleDevice.MotorCalls == motorCalls, "未所有の振動に触れない");
+                Check(rumble.SetRumble(2, -1, -1, -2) && rumbleDevice.Low == 1 && rumbleDevice.High == 0,
+                    "有限値の制限と非対応負値の中立化");
+                motorCalls = rumbleDevice.MotorCalls;
+                Check(!rumble.SetRumble(float.NaN, 0) && !rumble.SetRumble(0, float.PositiveInfinity) &&
+                    !rumble.SetRumble(0, 0, 0.1f) && rumbleDevice.MotorCalls == motorCalls,
+                    "不正値と非対応出力は既存出力を変更しない");
+                var rumbleFocus = typeof(XboxControllers).GetMethod("FocusChanged", BindingFlags.NonPublic | BindingFlags.Static);
+                rumbleFocus.Invoke(null, new object[] { false });
+                Check(rumbleDevice.MotorCalls == motorCalls + 1 && rumbleDevice.Low == 0 && rumbleDevice.High == 0,
+                    "フォーカス喪失で所有出力を停止");
+                Check(!rumble.SetRumble(1, 1), "背景振動要求を拒否");
+                rumbleFocus.Invoke(null, new object[] { true });
+                Check(rumbleDevice.MotorCalls == motorCalls + 1, "復帰で自動再開しない");
+                Check(rumble.SetRumble(0.2f, 0.3f), "明示的な再開");
+                InputSystem.DisableDevice(rumbleDevice);
+                Check(!rumble.IsConnected && rumbleDevice.Low == 0 && rumbleDevice.High == 0 &&
+                    !rumble.SetRumble(1, 1), "無効化で停止し古い参照を拒否");
+                InputSystem.RemoveDevice(rumbleDevice);
                 var first = InputSystem.AddDevice<Gamepad>();
                 var second = InputSystem.AddDevice<Gamepad>();
                 Controller pad = null;

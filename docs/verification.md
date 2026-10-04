@@ -6,6 +6,8 @@
 | --- | --- | --- |
 | C++ DLL | Windows x64、MSVC、C++17、SDK 3.5.283、/W4 /WX | ビルド成功、CTest 1/1 成功 |
 | Unity | 6000.3.20f1、Input System 1.19.0、実 Play フレーム | 99 assertions 成功 |
+| 継続後 Unity | 同じ Editor / Input System、振動 facade 回帰を追加 | 108 assertions 成功 |
+| 継続後 C++ | /W4 /WX、4モーター・所有権・raw 長の回帰 | CTest 1/1 成功 |
 | 仮想 Gamepad | 公開 API、標準ボタン・軸・エッジ・接続寿命 | 成功 |
 | native 合成入力 | 4パドル、短い押下解放、同時入力・取得失敗・mapping 異常 | 成功。実機証拠とは別 |
 | Editor | Legacy→Both、New/Both 保持、冪等性、Win64 import | 成功 |
@@ -29,6 +31,30 @@ USB の supportedLayout=0x03ff3fff にはパドルがないが、mapper は4個�
 ## 読み取り計測
 
 実 Unity Play のウォームアップ後、4軸と3ボタンの公開読み取りを10万回、5試行で測定。両 backend の全試行で managed allocation 0 B。最終実行の Unity fallback は49.774〜59.488 ms、native cache は18.218〜19.047 ms。fixture が異なるので速度比較・高速化率を主張しない。poll 全体や実機遅延の測定ではない。
+
+## Xbox 振動と raw GIP の継続検証
+
+2026年10月4日。実装前の独立設計レビューと変更後の独立レビューを実施した。切断時の所有出力停止、callback 解除失敗前の停止、致命的な読み取り失敗時の停止、live 接続検査、制限後の能力検査を追加した。native 合成検証は4モーターと16種類の能力組合せ、NaN/Infinity、拒否時の所有権保持、正常/失敗履歴再同期、切断、未所有出力、終了再試行を確認した。Unity は記録用 Gamepad の公開出力 override で本体出力、値の制限、非対応 trigger、フォーカス喪失・復帰・無効化を検証した。実機振動の証拠とは別である。
+
+今回の実 Play は108 assertions成功、公開読み取り5試行の0 B条件も成功した。sandbox 内の最初の実行はライセンスサービスへの接続に失敗し、通常のローカル環境で再実行して成功した。ホストCIは実行していない。
+
+USB 接続の受信専用 raw probe は1台、motor mask=0xF、inputKinds=0x01040007、input report 1個（kind=Input、id=0、size=18）、output report 0個を返した。GetRawDataSize は0であり、サイズ不一致として拒否、samples=0、終了コード1だった。空 payload を成功やパドル状態0の実測と扱わない。GameInput が返した firmwareVersion は0.0.0.0で、ユーザー確認の5.23.6.0を API で再確認できた意味ではない。合成テストは正常raw、空payload、部分コピー、未知ID、誤kind、report欠落を検証した。
+
+| 実機モーター | USB-C | Bluetooth / Wireless Adapter |
+| --- | --- | --- |
+| 本体低周波 / 高周波 | metadata 対応、物理応答・停止未検証 | 未検証 |
+| 左 / 右 impulse trigger | metadata 対応、物理応答・停止未検証 | 未検証 |
+
+`Tools/Test-Rumble.ps1` は同じセッション内で接続を選択し、transport を記録する。各モーターを個別に0.25で700 ms出力し、0出力後に位置・他モーターの反応・停止の観測を入力する。対応情報のないモーターは出力せず、finally でも所有出力を停止する。`-ListOnly` は出力を行わず能力を確認する。実機観測はユーザーとの試験待ちである。接続順や別プロセスのtokenを永続IDとして用いない。
+
+```powershell
+pwsh -NoProfile -File Tools/Test-Rumble.ps1 -ListOnly
+pwsh -NoProfile -File Tools/Test-Rumble.ps1
+# ビルド後の受信専用診断。期間は接続ごと、0なら初期状態だけ。
+.\.verification\native-build\Release\XbControllerRawProbe.exe 30
+```
+
+独立4パドルは引き続き未達。SDL fork の zlib ライセンスと Microsoft header の MIT / runtime の再頒布条件を区別して確認し、外部実装のコード・private offset・enable payload はコピーしていない。
 
 ## 再実行と未実施
 

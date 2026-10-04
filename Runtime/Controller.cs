@@ -98,6 +98,12 @@ namespace XbController
         public bool SetRumble(float low, float high, float leftTrigger = 0, float rightTrigger = 0)
         {
             if (!Readable || !Finite(low) || !Finite(high) || !Finite(leftTrigger) || !Finite(rightTrigger)) return false;
+            low = Mathf.Clamp01(low); high = Mathf.Clamp01(high);
+            leftTrigger = Mathf.Clamp01(leftTrigger); rightTrigger = Mathf.Clamp01(rightTrigger);
+            if ((low > 0 && (SupportedRumbleMotors & 1) == 0) ||
+                (high > 0 && (SupportedRumbleMotors & 2) == 0) ||
+                (leftTrigger > 0 && (SupportedRumbleMotors & 4) == 0) ||
+                (rightTrigger > 0 && (SupportedRumbleMotors & 8) == 0)) return false;
             if (UnityDevice == null)
             {
                 if (NativeApi.xb_rumble(ConnectionId, low, high, leftTrigger, rightTrigger) < 0) return false;
@@ -105,10 +111,9 @@ namespace XbController
             else
             {
                 if (leftTrigger != 0 || rightTrigger != 0) return false;
-                UnityDevice.SetMotorSpeeds(Mathf.Clamp01(low), Mathf.Clamp01(high));
+                UnityDevice.SetMotorSpeeds(low, high);
             }
-            ownsRumble = Mathf.Clamp01(low) > 0 || Mathf.Clamp01(high) > 0 ||
-                Mathf.Clamp01(leftTrigger) > 0 || Mathf.Clamp01(rightTrigger) > 0;
+            ownsRumble = low > 0 || high > 0 || leftTrigger > 0 || rightTrigger > 0;
             return true;
         }
 
