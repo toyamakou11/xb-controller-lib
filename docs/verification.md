@@ -129,7 +129,15 @@ pwsh -NoProfile -File Tools/Test-NativePolling.ps1
 
 再開には、未試行の公開仕様に基づく厳密な装置連結と、callback を停止して所有資源を安全に解放できる経路の両方が必要。その後に4個別・同時・解放・ABXY独立性と再接続・終了を実機検証する。Issue は未完了のまま保持する。
 
-今回のローカル確認は既存 native CTest 2/2 と実 facade 合成10 assertions が成功。文書のみの変更で、再ビルド・Unity Play・追加実機試験は実施していない。controller 設定、Actions、paid service は変更・使用していない。
+実装保留時のローカル確認は既存 native CTest 2/2 と実 facade 合成10 assertions が成功。その時点では文書のみの変更で、再ビルド・Unity Play・追加実機試験は実施していない。controller 設定、Actions、paid service は変更・使用していない。
+
+### Astra による追加評価
+
+`gpt-6-astra` の助言で、[GameInput #27 の foreground 制約報告](https://github.com/microsoftconnect/GameInput/issues/27)を新仮説として検証した。受信専用の別 EXE に Win32 窓と message pump を設け、focus 後の新しい reading だけを評価した。SDK 3.5.283、同じ device pointer、descriptor/kind/id/actual/copied 長を検査し、空値は採用していない。MSVC /W4 /WX ビルド成功。
+
+ユーザーは USB-C 接続と4個別・同時・解放・ABXYのみの操作完了を回答した。18-byte/id0 の有効 raw 101件を受信し、foreground batch 内は93件、invalid=0、focus 計37,234 ms。操作完了後に窓を正常終了した。変化は byte1 と byte4〜7、byte12〜17は全件0で、独立パドルの証拠は得られなかった。以前の空 payload 結果は背景診断の結果として保持する。
+
+Astra の独立レビューも raw 受信と USB パドル達成を分離した。focus は batch ごとの検査、履歴 gap は386件、同値 baseline は変化ログから省略され得るため、連続履歴・edge・lifecycle の実機合格とは扱わない。18-byte framing の意味は未確定。WGI decoder・enable 命令・設定変更は追加せず、Issue #3 と PR #21 の実装保留を維持する。
 
 Tools/Test-Unity.ps1 -UnityEditor '<installed Editor path>' は専用一時プロジェクトを使い、既存 Unity プロジェクトを変更しない。Tools/Probe-Controller.ps1 -Seconds 30 は接続と変化 snapshot を表示する。SDK と .verification/ の証拠は Git 対象外。
 
