@@ -1,7 +1,7 @@
 using UnityEngine;
 using XbController;
 
-// 空の GameObject に追加すると、接続された全端末の入力を確認できる。
+// 空の GameObject に追加する。
 public sealed class InputMonitor : MonoBehaviour
 {
     private void Update()

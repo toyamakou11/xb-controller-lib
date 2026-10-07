@@ -84,29 +84,28 @@ pwsh -NoProfile -File Tools/Test-Rumble.ps1
 
 ## 再実行と未実施
 
-### 2026年10月8日の継続調査
+### 2026年10月8日の確認
 
-Issue #1 と PR #2 は open、PR は draft ではなく、再開時の公開 head は `b8209c6aa21e40c2c68b4ab934c2542e14fc48d8`。作業ツリーは clean、配布 DLL の SHA-256 は上記最終 DLL と一致した。GitHub API の PR 全変更77ファイルについて、公開 blob SHA とローカル `git hash-object` が全件一致した。引き継ぎ文の17ファイルという値は PR 全体の件数として採用しない。
+- 再開時: PR #2・Issue #1は open。headは `b8209c6`。作業ツリーは clean。公開PRの77ファイルはローカルblobと一致。
+- USB: WGI と GameInput の同一装置を結ぶ公開経路は未確立。既存の失敗した照会は再実行しない。
+- [FindDeviceFromObject](https://learn.microsoft.com/en-us/gaming/gdk/docs/reference/input/gameinput/deprecated/interfaces/igameinput/methods/igameinput_finddevicefromobject?view=gdk-2604): v0でも未実装。v1で削除。
+- [NonRoamableId](https://learn.microsoft.com/en-us/uwp/api/windows.gaming.input.rawgamecontroller.nonroamableid?view=winrt-26100): application別のID。公開GameInput/PnP IDへの変換契約は未確認。
+- [Factory API](https://learn.microsoft.com/en-us/uwp/api/windows.gaming.input.custom.gamecontrollerfactorymanager?view=winrt-26100): 登録解除なし。別EXE化も装置の同一性を解決しない。
+- [SDL参考source](https://github.com/hifihedgehog/SDL/blob/1d2bf1f9b334ae791266bf332d534d73f34f2ccc/src/joystick/windows/SDL_xinput_paddle_wgi.cpp): provider ID解析・DLL固定・zlib noticeを確認。追加コードは不採用。
+- 接続診断: GameInput 1台・中立値・S_OK。接続方式・firmware・独立パドル受信の証拠とは扱わない。
 
-既存 Release テストバイナリの CTest を再実行し、native/GATT の2/2が成功した。今回は再ビルド、Unity Play、追加の物理パドル・振動試験を実施していない。公開 PnP の present 一覧に Bluetooth と XboxComposite の項目があり、既存の受信専用 `Tools/Probe-Controller.ps1 -Seconds 0` は GameInput 接続1台、callback/read 診断 S_OK、中立状態を返した。この metadata と初期 snapshot は現在の接続方式・firmware・独立パドル受信を証明しない。
-
-独立した一次資料調査と別の独立設計評価で、USB supplement の identity と DLL 寿命を再検討した。[FindDeviceFromPlatformString](https://learn.microsoft.com/en-us/gaming/gdk/docs/reference/input/gameinput/interfaces/igameinput/methods/igameinput_finddevicefromplatformstring) は一致する platform string から GameInput 装置を取得する API だが、WGI の任意の ID を必ず受け付ける契約ではない。過去に失敗した未変更 ID/PnP 照会は繰り返していない。WGI 内の controlling IUnknown 一致から、別 API の GameInput token/container の同一性は導けない。
-
-追加候補の [FindDeviceFromObject](https://learn.microsoft.com/en-us/gaming/gdk/docs/reference/input/gameinput/deprecated/interfaces/igameinput/methods/igameinput_finddevicefromobject?view=gdk-2604) は、Microsoft が v0 でも未実装で E_NOTIMPL を返し、v1で削除したと明記しているため採用しない。[NonRoamableId](https://learn.microsoft.com/en-us/uwp/api/windows.gaming.input.rawgamecontroller.nonroamableid?view=winrt-26100) は application ごとに異なる ID であり、公開 PnP/GameInput ID への変換契約は確認できなかった。
-
-[GameControllerFactoryManager](https://learn.microsoft.com/en-us/uwp/api/windows.gaming.input.custom.gamecontrollerfactorymanager?view=winrt-26100) の公開一覧には登録と WGI 内の関連づけがあるが、factory の登録解除はない。scratch EXE のプロセス寿命までの資源保持を DLL に移しても、callback/vtable が参照する DLL コードの unload 安全性は確立しない。別プロセス化はこの寿命を隔離する候補だが、WGI と GameInput の正確な identity を解決しない。IPC、終了・再起動、欠落時の edge、foreground 受信条件の新しい検証も必要となるため、同等の小さな修正とは扱わない。
-
-参考 SDL branch の [WGI source](https://github.com/hifihedgehog/SDL/blob/1d2bf1f9b334ae791266bf332d534d73f34f2ccc/src/joystick/windows/SDL_xinput_paddle_wgi.cpp) を現在の commit `1d2bf1f9b334ae791266bf332d534d73f34f2ccc` で確認した。provider ID の解析と `GET_MODULE_HANDLE_EX_FLAG_PIN` が存在するが、これを公開 GameInput identity の根拠や unload 完了の証拠には使わない。source 冒頭の zlib notice と、ローカル改変 probe の notice・改変版表示を確認した。追加コードは採用していない。
-
-現時点で既存契約を保つ新しい USB 製品経路は確立できず、runtime・ABI・配布 DLL は変更しない。USB を採用する前提は、公開 API による対象 GameInput device/container との検証可能な関連づけと、callback 完了後の安全な終了を示す設計・証拠の両方である。独立4パドルの Bluetooth 実機結果を記載する既存受け入れ条件は変更しない。GitHub Actions、有料サービス、merge、controller 設定変更は行っていない。
+USB採用には正確な公開identityと安全なcallback終了の証拠が必要。独立評価でも現状の製品採用は見送る。Bluetoothの受け入れ条件は保持する。
 
 ### CodeRabbit 指摘への対応
 
-2026年10月8日。`XboxControllers.PollNative` の容量交渉を初回呼び出しと最大4回の再試行に変更した。native が返した必要台数だけ配列を拡張し、なお InsufficientBuffer なら既存 Controller と診断を保持して次の更新へ進む。容量不足で全参照を無効化しない。他の負の結果では既存の停止・無効化処理を保持する。`Build-Native.ps1` は vswhere の終了コードと空白の installationPath、探索した cmake.exe の存在を検査し、SDK 処理前に原因を明示する。
+- 容量交渉: 初回＋最大4回。上限後はControllerと診断を保持。他の取得失敗は無効化。
+- ビルド探索: vswhereの終了コード・空白パス・cmake.exeの存在を検査。
+- 合成回帰: 実facadeの10 assertions成功。旧版は失敗。探索ASTの5条件も成功。
+- native: 通常ビルドとCTest 2/2成功。配布DLLのSHA-256は `602FAAA8D310424C70A2C20D4CA0E380F12D1D56C8634EE83C09F6CA5F5F6CC5`。
+- Unity: 今回のPlayはlicenseエラーexit198で開始前に失敗。実Unity参照で全runtimeをC#9・Windows define・警告をエラー扱いでコンパイルし、成功。
+- 独立設計・最終レビュー: 承認。追加実機試験・Actionsは未実施。
 
-独立設計評価と最終差分レビューを実施した。`Tools/Test-NativePolling.ps1` は実際の facade source を合成 NativeApi/Unity 型とコンパイルし、連続拡張、呼び出し上限、参照・診断保持、次回の復旧、成功時の切断反映、配列再利用、致命的失敗を10 assertionsで検証した。変更前 source では連続拡張の検証が失敗し、変更後は全件成功した。これは facade の分岐・参照保持の合成検証であり、実機 hotplug や実モーター停止の証拠ではない。探索部分の実 script AST を使うローカル合成検査では、vswhere 失敗・空値・空白値・CMake 欠落・正常の5条件が成功した。
-
-通常の native build script で構成・ビルドと CTest 2/2が成功し、配布 DLL の SHA-256 は `602FAAA8D310424C70A2C20D4CA0E380F12D1D56C8634EE83C09F6CA5F5F6CC5` のまま。Unity Play 再実行は Editor license が見つからず exit198で開始前に失敗した。そこで既存 Unity 6000.3.20f1 の compiler response と実 Input System 1.19.0/Unity 参照を用い、変更後の runtime source 全体を C#9・Windows define・警告をエラー扱いで別出力へコンパイルし、成功を確認した。これは今回の実 Play108 assertions成功ではなく、以前の Play 記録と区別する。追加実機試験と GitHub Actions は実施していない。
+今回の合成回帰と参照コンパイルは、以前の実Play108 assertionsや実機試験とは別。
 
 ```powershell
 pwsh -NoProfile -File Tools/Test-NativePolling.ps1

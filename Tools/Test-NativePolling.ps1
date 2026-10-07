@@ -1,4 +1,4 @@
-# 実 facade を合成 NativeApi と最小 Unity 型でコンパイルする。実機・Unity 検証とは別。
+# 実 facade の合成テスト。実機・Unity 検証は別。
 [CmdletBinding()]
 param([string]$SourcePath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'Runtime/XboxControllers.cs'))
 $ErrorActionPreference = 'Stop'

@@ -18,7 +18,6 @@ constexpr std::array<GameInputGamepadButtons, 4> paddleButtons{
     GameInputGamepadPaddleLeft1, GameInputGamepadPaddleLeft2,
     GameInputGamepadPaddleRight1, GameInputGamepadPaddleRight2};
 constexpr std::uint32_t paddleMask = GameInputGamepadModulePaddles4;
-// SDL の vendor report は右上・右下・左上・左下の順。SDK の旧 P1 名とは混同しない。
 // https://github.com/hifihedgehog/SDL/blob/feat/hidmaestro-filter/docs/README-xinput-paddles.md
 std::uint32_t PaddleMask(std::uint8_t bits) noexcept {
     return ((bits & 1) ? GameInputGamepadPaddleRight1 : 0u)
@@ -58,7 +57,7 @@ struct Context {
     bool stopping{};
     HRESULT callbackError{S_OK};
 };
-// 公開関数は Unity のメインスレッド専用。callback だけが別スレッドで動く。
+// 公開関数は Unity メインスレッド専用。
 std::unique_ptr<Context> context;
 std::uint64_t nextToken = 1;
 
@@ -112,7 +111,6 @@ void CALLBACK DeviceChanged(GameInputCallbackToken, void* data, IGameInputDevice
                         && mapping.controllerIndex < info->controllerInfo->controllerButtonCount)
                         entry.rawMappings.push_back({static_cast<std::uint32_t>(paddle), mapping.controllerIndex});
                 }
-                // 重複 index を独立入力として公開しない。観測した実機番号は使用しない。
                 std::uint32_t duplicateMask{};
                 for (std::size_t i = 0; i < entry.rawMappings.size(); ++i)
                     for (std::size_t j = i + 1; j < entry.rawMappings.size(); ++j)
@@ -171,7 +169,6 @@ bool Apply(Device& entry, IGameInputReading* reading, bool edges) noexcept {
     auto buttons = static_cast<std::uint32_t>(value.buttons) & entry.state.supported;
     if (!entry.supplemental && !entry.rawMappings.empty()) {
         const auto returned = reading->GetControllerButtonState(entry.rawCount, entry.rawButtons.get());
-        // 両状態が取得できてから commit する。部分成功で古い値やエッジを残さない。
         buttons &= ~static_cast<std::uint64_t>(entry.rawMask);
         for (const auto& mapping : entry.rawMappings) {
             if (mapping.index >= returned) return false;
@@ -212,7 +209,7 @@ void Neutral(Device& entry, HRESULT error) noexcept {
 
 void Poll(Context& c, Device& entry, std::uint64_t cutoff) noexcept {
     entry.state.pressed = entry.state.released = 0;
-    // 前回合成した system bit は gamepad 比較の対象から除く。
+    // system bit を gamepad の edge 比較から除く。
     entry.state.buttons &= 0xFFFFFFFFull;
     if (!entry.reading) {
         ComPtr<IGameInputReading> latest;
@@ -229,7 +226,6 @@ void Poll(Context& c, Device& entry, std::uint64_t cutoff) noexcept {
                 ComPtr<IGameInputReading> latest;
                 auto latestHr = c.input->GetCurrentReading(GameInputKindGamepad, entry.device.Get(), &latest);
                 if (FAILED(latestHr)) { Neutral(entry, latestHr); return; }
-                // 失われた区間の押下/解放は推測せず、再同期を診断に残す。
                 entry.state.pressed = entry.state.released = 0;
                 if (!Apply(entry, latest.Get(), false)) { Neutral(entry, E_FAIL); return; }
                 entry.state.error = hr;
@@ -260,9 +256,9 @@ std::int32_t __cdecl xb_initialize(std::uint32_t version, std::uint32_t size) no
         if (FAILED(hr)) { context.reset(); return hr; }
         hr = xb_gatt::Initialize();
         if (FAILED(hr)) c.callbackError = hr;
-        // 接続列挙をフォーカスから分離する。ゲームへの公開は C# 側でフォーカスを守る。
+        // 入力公開の focus 制限は C# 側で行う。
         c.input->SetFocusPolicy(GameInputEnableBackgroundInput);
-        // blocking enumeration は callback を呼ぶため、ここで mutex を取得しない。
+        // 同期 callback を呼ぶため mutex を保持しない。
         hr = c.input->RegisterDeviceCallback(nullptr, GameInputKindGamepad, GameInputDeviceConnected,
             GameInputBlockingEnumeration, &c, DeviceChanged, &c.deviceCallback);
         if (SUCCEEDED(hr)) hr = c.input->RegisterSystemButtonCallback(nullptr,
@@ -278,12 +274,11 @@ std::int32_t __cdecl xb_shutdown() noexcept {
     {
         std::lock_guard<std::mutex> lock(c.mutex);
         c.stopping = true;
-        // callback 解除失敗でも、所有する出力を先に停止する。
         for (auto& entry : c.devices) StopOwnedRumble(entry);
     }
     const auto gattResult = xb_gatt::Shutdown();
     if (FAILED(gattResult)) return gattResult;
-    // 解除の待機中に mutex を保持しない。失敗時は callback の資源を保持する。
+    // callback 待機中は mutex を保持しない。
     if (c.deviceCallback && !c.input->UnregisterCallback(c.deviceCallback)) return E_FAIL;
     c.deviceCallback = 0;
     if (c.systemCallback && !c.input->UnregisterCallback(c.systemCallback)) return E_FAIL;
@@ -312,7 +307,7 @@ std::int32_t __cdecl xb_poll(XbSnapshot* buffer, std::uint32_t capacity, std::ui
         if (sample.received || entry.suppressPaddleEdges)
             entry.state.buttons &= ~static_cast<std::uint64_t>(paddleMask);
         Poll(c, entry, cutoff);
-        // 標準履歴の再同期と GATT の edge は独立。致命的な標準読み取り失敗は全入力を中立化する。
+        // 標準履歴の再同期は GATT edge を破棄しない。
         if (sample.received && (SUCCEEDED(entry.state.error) || entry.state.error == GAMEINPUT_E_REFERENCE_READING_TOO_OLD)) {
             entry.state.buttons |= PaddleMask(sample.buttons);
             entry.state.pressed |= PaddleMask(sample.pressed);
@@ -322,7 +317,6 @@ std::int32_t __cdecl xb_poll(XbSnapshot* buffer, std::uint32_t capacity, std::ui
         entry.suppressPaddleEdges = false;
         buffer[i] = entry.state;
     }
-    // callback 診断は正常な既存端末の読み取りを止めない。
     return S_OK;
 }
 

@@ -64,11 +64,9 @@ namespace XbController
             int result = NativeApi.xb_poll(buffer, (uint)buffer.Length, out count, out int diagnostic);
             for (int retry = 0; retry < 4 && result == NativeApi.InsufficientBuffer; retry++)
             {
-                // 台数増加時だけ拡張し、通常更新では同じ配列を再利用する。
                 buffer = new NativeSnapshot[count];
                 result = NativeApi.xb_poll(buffer, (uint)buffer.Length, out count, out diagnostic);
             }
-            // 列挙中の台数増加は致命的な取得失敗ではない。次の更新まで既存参照を保持する。
             if (result == NativeApi.InsufficientBuffer) return;
             if (result < 0)
             {

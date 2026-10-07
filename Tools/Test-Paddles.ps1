@@ -1,4 +1,3 @@
-# 公開 ABI を読み取り、標準ボタンと独立 paddle の状態・edge を別々に記録する。
 [CmdletBinding()]
 param([ValidateRange(1,600)][int]$Seconds = 120, [switch]$ResyncWhileHeld, [string]$StopFile)
 $ErrorActionPreference = 'Stop'

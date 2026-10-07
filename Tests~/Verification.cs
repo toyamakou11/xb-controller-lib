@@ -120,7 +120,7 @@ namespace XbController.Verification
                 UpdateInput();
                 for (int i = 0; i < unityButtons.Length; i++)
                 {
-                    // 最初にエッジ参照を温め、Unity 自身の初回追跡の制約を除く。
+                    // Unity の初回 edge 追跡を温める。
                     pad.WasPressed(xboxButtons[i]); pad.WasReleased(xboxButtons[i]);
                     InputSystem.QueueStateEvent(first, new GamepadState().WithButton(unityButtons[i]));
                     UpdateInput();

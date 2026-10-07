@@ -1,4 +1,3 @@
-# 同一セッションで選択した端末へ、対応モーターだけ短い試験出力を送る。
 [CmdletBinding()]
 param([switch]$ListOnly)
 $ErrorActionPreference = 'Stop'
@@ -38,7 +37,7 @@ try {
     $devices = @(Read-Controllers)
     foreach ($device in $devices) { 'Connection={0} MotorMask=0x{1:X} ReadError=0x{2:X8}' -f $device.Token,$device.Rumble,$device.Error }
     if ($ListOnly -or $devices.Count -eq 0) { return }
-    # 別プロセスの token を流用せず、この表示から必ず明示的に選ぶ。
+    # token はこのセッション内だけで有効。
     $choice = Read-Host 'このセッションの Connection を選択（空欄で終了）'
     if (-not $choice) { return }
     if (-not [uint64]::TryParse($choice,[ref]$selected) -or -not ($devices.Token -contains $selected)) { throw '選択が無効です。' }
@@ -47,7 +46,7 @@ try {
     $names = @('LowFrequency 本体左','HighFrequency 本体右','LeftTrigger 左トリガー','RightTrigger 右トリガー')
     for ($motor=0; $motor -lt $names.Length; $motor++) {
         $device = @(Read-Controllers | Where-Object Token -eq $selected)
-        # 履歴失効後の正常な最新値への同期は、facade と同じく有効な状態として扱う。
+        # 履歴再同期は致命的エラーではない。
         $historyResync = -2088108028 # GAMEINPUT_E_REFERENCE_READING_TOO_OLD (0x838A0004)
         if ($device.Count -ne 1 -or ($device[0].Error -lt 0 -and $device[0].Error -ne $historyResync)) { throw '選択端末の接続・読み取りを確認できません。' }
         if (($device[0].Rumble -band (1 -shl $motor)) -eq 0) { "$($names[$motor]): metadata 非対応、出力なし"; continue }

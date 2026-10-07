@@ -2,7 +2,7 @@ using System;
 
 namespace XbController
 {
-    // 下位32bitは GameInput v3 の公開フラグ。上位は system callback 専用。
+    // 下位32bitは GameInput v3、上位は system callback 用。
     [Flags]
     public enum XboxButton : ulong
     {

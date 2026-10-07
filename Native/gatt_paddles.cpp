@@ -26,9 +26,7 @@ using namespace winrt::Windows::Devices::Enumeration;
 using namespace winrt::Windows::Devices::Bluetooth;
 using namespace winrt::Windows::Devices::Bluetooth::GenericAttributeProfile;
 using Cccd = GattClientCharacteristicConfigurationDescriptorValue;
-// 公開 API 上の vendor protocol。機種名・VID/PID・接続順で装置を選ばない。
 // https://github.com/hifihedgehog/SDL/blob/feat/hidmaestro-filter/src/joystick/windows/SDL_xinput_paddle_gatt.cpp
-// 17-byte payload の byte14 の bits0-3 は物理 P1-P4。profile による補完はしない。
 constexpr guid ServiceUuid{0x00000001,0x5f60,0x4c4f,{0x9c,0x83,0xa7,0x95,0x32,0x98,0xd4,0x0d}};
 constexpr guid CharacteristicUuid{0x00000005,0x5f60,0x4c4f,{0x9c,0x83,0xa7,0x95,0x32,0x98,0xd4,0x0d}};
 struct Attachment {
@@ -38,7 +36,7 @@ struct Attachment {
     std::atomic<std::uint64_t> generation{};
     std::mutex mutex;
     Sample sample{};
-    // 以下は MTA worker だけが操作する。
+    // MTA worker 専用。
     bool started{}, subscribed{}, attempted{}, cleaned{}, cleanupBlocked{};
     ULONGLONG retryAt{};
     unsigned retryDelay{1000};
@@ -63,7 +61,7 @@ struct Context {
     std::thread worker;
 };
 std::mutex ownerMutex;
-// 終了失敗時に DLL の実行資源を破棄しない。成功した Shutdown だけが delete する。
+// 終了失敗時は DLL 実行資源を保持する。
 Context* context{};
 
 void Neutral(Attachment& item, HRESULT error) noexcept {
@@ -84,10 +82,9 @@ template<class T> T Await(Context& c, Attachment& item, IAsyncOperation<T> const
         if (!canceled && (GetTickCount64() >= deadline || (!cleanup && (c.stopping || item.retire)))) {
             canceled = true;
             Neutral(item,HRESULT_FROM_WIN32(ERROR_TIMEOUT));
-            // Cancel の失敗でも、開始済みの書き込みを残して cleanup に進まない。
             try { operation.Cancel(); } catch (...) { }
         }
-        // Cancel は rollback ではない。terminal になるまで operation と所有資源を保持する。
+        // Cancel は rollback ではないため、terminal まで待つ。
         Sleep(10);
     }
 }
@@ -132,7 +129,7 @@ void Accumulate(Attachment& item, std::uint8_t const* bytes, std::size_t size, s
         value.pressed |= static_cast<std::uint8_t>(buttons & ~value.buttons);
         value.released |= static_cast<std::uint8_t>(value.buttons & ~buttons);
     }
-    // 初回・gap後は最新値に同期し、欠落した押下/解放を作らない。
+    // 初回・gap後の edge は推測しない。
     value.buttons = buttons;
     value.received = true;
     value.error = S_OK;
@@ -164,7 +161,7 @@ void Discover(Context& c, std::shared_ptr<Attachment> const& item) {
         if (selected) throw hresult_error(HRESULT_FROM_WIN32(ERROR_DUP_NAME));
         selected = endpoint;
     }
-    // USB 等に対応する LE endpoint がないことは、通常の fallback 条件。
+    // LE endpoint の欠落は正常な fallback 条件。
     if (!selected) { Neutral(*item,S_OK); item->active = false; item->retire = true; return; }
     auto properties = selected.Properties();
     constexpr wchar_t addressKey[] = L"System.Devices.Aep.DeviceAddress";
@@ -173,7 +170,7 @@ void Discover(Context& c, std::shared_ptr<Attachment> const& item) {
     if (!addressProperty || addressProperty.Type() != PropertyType::String) throw hresult_error(E_INVALIDARG);
     const auto addressText = addressProperty.GetString();
     const auto address = Address(std::wstring_view(addressText));
-    // 実機で確認した公開 address API。FromIdAsync の UI consent 経路を使わない。
+    // FromIdAsync の UI consent を避ける。
     item->device = Await(c,*item,BluetoothLEDevice::FromBluetoothAddressAsync(address));
     if (!item->device || item->device.BluetoothAddress() != address || item->device.DeviceInformation().Id() != selected.Id())
         throw hresult_error(E_INVALIDARG);
@@ -201,7 +198,7 @@ void Discover(Context& c, std::shared_ptr<Attachment> const& item) {
     item->event = item->characteristic.ValueChanged([item,generation](GattCharacteristic const&,GattValueChangedEventArgs const& args) noexcept { Receive(item,generation,args); });
     item->subscribed = true;
     if (c.stopping || item->retire || !item->active) throw hresult_error(HRESULT_FROM_WIN32(ERROR_CANCELLED));
-    // Notify の再登録は必要だが、既存 Notify を None に切り替えない。
+    // 既存 Notify を None に切り替えない。
     item->attempted = true;
     const auto status = Await(c,*item,item->characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(Cccd::Notify));
     if (status != GattCommunicationStatus::Success) throw hresult_error(E_FAIL);
@@ -217,7 +214,7 @@ bool Cleanup(Context& c, Attachment& item) noexcept {
         if (item.attempted && item.original == Cccd::None) {
             auto config = Await(c,item,item.characteristic.ReadClientCharacteristicConfigurationDescriptorAsync(),true);
             if (config.Status() != GattCommunicationStatus::Success) throw hresult_error(E_FAIL);
-            // CCCD に compare/exchange はない。競合する他 client の完全な保護は保証しない。
+            // CCCD の変更は他 client と原子的に調停できない。
             if (config.ClientCharacteristicConfigurationDescriptor() == Cccd::Notify &&
                 Await(c,item,item.characteristic.WriteClientCharacteristicConfigurationDescriptorAsync(item.original),true) != GattCommunicationStatus::Success)
                 throw hresult_error(E_FAIL);
@@ -260,11 +257,11 @@ bool ContainerConflict(Attachment const& item, guid container) noexcept {
 }
 
 bool BlocksDiscovery(Attachment const& previous, Attachment const& next) noexcept {
-    // detached でも、旧 CCCD 復元が完了するまで新 subscriber を開始しない。
+    // 旧 CCCD 復元が終わるまで新購読を待つ。
     return previous.token != next.token && previous.container == next.container && !previous.cleaned;
 }
 
-// c.mutex を保持して呼ぶ。単一 worker なので許可後に旧 cleanup が再開することはない。
+// c.mutex の保持が必要。
 bool CanDiscover(Context const& c, Attachment const& item) noexcept {
     for (auto const& previous : c.attachments) if (BlocksDiscovery(*previous,item)) return false;
     return true;
@@ -283,7 +280,7 @@ void Run(Context& c) noexcept {
                   item = c.attachments[index++]; }
                 if (c.stopping) { item->active = false; item->retire = true; }
                 {
-                    // Detach/重複 Attach と同じ lock 下で条件を再確認し、失効を上書きしない。
+                    // Detach と同じ lock で失効を再確認する。
                     std::lock_guard<std::mutex> lock(c.mutex);
                     if (RetryReady(*item,c.stopping,GetTickCount64())) {
                         ++item->generation;
@@ -303,7 +300,6 @@ void Run(Context& c) noexcept {
                         } else {
                             const auto now = GetTickCount64();
                             if (!item->cleanupWaitSince) item->cleanupWaitSince = now;
-                            // 待機は foreground を止めず、10秒後は timeout を診断して待機を継続する。
                             Neutral(*item,now - item->cleanupWaitSince >= 10000 ? HRESULT_FROM_WIN32(ERROR_TIMEOUT) : E_PENDING);
                         }
                     }
@@ -323,7 +319,6 @@ void Run(Context& c) noexcept {
                     item->active = false; item->retire = true;
                     ScheduleRetry(*item);
                 }
-                // Offline CCCD の復元失敗も、接続復帰後に 1-8秒 backoff で再試行する。
                 const bool cleanupRetry = item->cleanupBlocked && GetTickCount64() >= item->cleanupRetryAt &&
                     (!item->attempted || Connected(*item));
                 if (item->retire && !item->cleaned && (!item->cleanupBlocked || c.stopping || cleanupRetry))
@@ -384,7 +379,6 @@ void Attach(std::uint64_t token, GUID container) noexcept {
         context->attachments.push_back(std::move(next));
         context->wake.notify_one();
     } catch (...) {
-        // 接続時の確保失敗を診断として残し、callback から例外を出さない。
         std::lock_guard<std::mutex> owner(ownerMutex);
         if (context) { std::lock_guard<std::mutex> lock(context->mutex); context->attachError = E_OUTOFMEMORY; }
     }
@@ -434,7 +428,6 @@ HRESULT Shutdown() noexcept {
         if (!current) return S_OK;
         current->stopping = true;
         std::lock_guard<std::mutex> lock(current->mutex);
-        // 前回 terminal で終わった復元失敗は、新しい MTA worker で再試行する。
         if (current->finished) {
             if (current->worker.joinable()) current->worker.join();
             current->finished = false;
@@ -479,7 +472,6 @@ bool TestAccumulator() noexcept {
     item.active = true; item.generation = 2;
     Accumulate(item,packet.data(),packet.size(),1);
     if (item.sample.buttons != 8 || item.sample.released) return false;
-    // 接続復帰の候補でも、detach/曖昧 identity/停止は再有効化を禁止する。
     item.cleaned = true; item.retire = true; item.retryAt = 100;
     if (RetryReady(item,false,99) || !RetryReady(item,false,100)) return false;
     item.detached = true;
@@ -499,7 +491,6 @@ bool TestAccumulator() noexcept {
     if (!BlocksDiscovery(item,next)) return false;
     item.cleaned = true;
     if (BlocksDiscovery(item,next)) return false;
-    // 異なる container と同一 token は、この待機条件の対象外。
     item.cleaned = false;
     next.container.Data1 = 1;
     if (BlocksDiscovery(item,next)) return false;

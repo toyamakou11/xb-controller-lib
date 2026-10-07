@@ -11,7 +11,7 @@ using Microsoft::WRL::RuntimeClassFlags;
 using Microsoft::WRL::ClassicCom;
 using Microsoft::WRL::Make;
 
-// bridge の統合テストは無線端末・WinRT worker を起動しない。
+// 実機・WinRT worker は使用しない。
 namespace xb_gatt {
 Sample fixture{};
 HRESULT shutdownResult = S_OK;
@@ -218,7 +218,6 @@ XbSnapshot Snapshot(std::int32_t* diagnostic = nullptr) {
     return value;
 }
 
-// 実機番号と異なる疎な index で、API 由来マッピングの読み取りを検証する。
 void RawFixture() {
     auto& device = context->devices[0];
     device.rawCount = 12;
@@ -381,7 +380,7 @@ int main() {
     auto shortRaw = RawSample(30, GameInputGamepadA, 15);
     shortRaw->state.leftTrigger = 0.7f;
     shortRaw->state.leftThumbstickX = 0.9f;
-    shortRaw->raw.resize(8); // 最初の保存 index 9 を含まない。
+    shortRaw->raw.resize(8);
     input->history.push_back(RawSample(29, GameInputGamepadA, 15));
     input->history.push_back(shortRaw);
     value = Snapshot();

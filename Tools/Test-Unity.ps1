@@ -1,4 +1,3 @@
-# 専用の使い捨てプロジェクトで実 Unity Editor の検証を行う。
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$UnityEditor)
 $ErrorActionPreference = 'Stop'
@@ -33,7 +32,6 @@ if (-not (Test-Path "$project/ProjectSettings/ProjectVersion.txt")) {
 $resultFile = "$project/verification-result.txt"
 if (Test-Path -LiteralPath $resultFile) { Remove-Item -LiteralPath $resultFile }
 $process = Start-Process -FilePath $UnityEditor -WindowStyle Hidden -ArgumentList @('-batchmode','-nographics','-projectPath',('"'+$project+'"'),'-executeMethod','XbController.Verification.Verification.Start','-logFile',('"'+"$repository/.verification/unity-test.log"+'"')) -PassThru
-# ライセンスサービス等の常駐子プロセスではなく Editor 本体の終了を待つ。
 $process.WaitForExit()
 if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $resultFile)) { throw 'Unity 検証失敗。.verification/unity-test.log を確認してください。' }
 $result = Get-Content -LiteralPath $resultFile -Raw

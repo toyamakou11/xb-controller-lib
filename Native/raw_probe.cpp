@@ -1,4 +1,3 @@
-// 公開 raw GIP の受信だけを診断する。出力命令・パドルの推測は行わない。
 #include <Windows.h>
 #include <GameInput.h>
 #include <wrl/client.h>
@@ -80,9 +79,8 @@ int RawProbeMain(int argc, char** argv) {
         GameInputCallbackToken callback{};
         hr = enumeration->input->RegisterDeviceCallback(nullptr, GameInputKindGamepad, GameInputDeviceConnected,
             GameInputBlockingEnumeration, enumeration.get(), Connected, &callback);
-        // 列挙後の callback を止め、COM 参照と live status で捕捉中の接続を確認する。
         if (callback && !enumeration->input->UnregisterCallback(callback)) {
-            enumeration.release(); // callback context を解放しない。プロセス終了で回収する。
+            enumeration.release(); // callback context はプロセス終了まで保持。
             std::puts("unregisterFailed: capture aborted"); return 1;
         }
         if (FAILED(hr) || enumeration->failed) { std::puts("enumerationFailed"); return 1; }

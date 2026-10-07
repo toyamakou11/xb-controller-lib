@@ -37,7 +37,6 @@ namespace XbController
             Backend = ControllerBackend.UnityInputSystem;
             UnityDevice = pad;
             ConnectionId = (ulong)pad.deviceId;
-            // 機種番号ではなく Unity が保証する意味的 control を対応づける。
             buttons = new[] { XboxButton.Menu, XboxButton.View, XboxButton.A, XboxButton.B, XboxButton.X, XboxButton.Y,
                 XboxButton.DpadUp, XboxButton.DpadDown, XboxButton.DpadLeft, XboxButton.DpadRight,
                 XboxButton.LeftShoulder, XboxButton.RightShoulder, XboxButton.LeftStickClick, XboxButton.RightStickClick,
@@ -51,7 +50,7 @@ namespace XbController
                 pad.leftStick.up, pad.leftStick.down, pad.leftStick.left, pad.leftStick.right,
                 pad.rightStick.up, pad.rightStick.down, pad.rightStick.left, pad.rightStick.right };
             for (int i = 0; i < buttons.Length; i++) if (controls[i] != null) SupportedButtons |= buttons[i];
-            // Unity の汎用 Gamepad は2モーターの出力 API を持つ。実機応答は別途確認が必要。
+            // Unity Gamepad API は本体2モーターのみ。
             SupportedRumbleMotors = 3;
         }
 

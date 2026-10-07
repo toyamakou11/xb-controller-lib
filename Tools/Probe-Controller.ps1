@@ -1,4 +1,3 @@
-# 接続情報とボタン遷移を読み取る。プロファイルや振動は変更しない。
 [CmdletBinding()]
 param([ValidateRange(0,300)][int]$Seconds = 0)
 $ErrorActionPreference = 'Stop'

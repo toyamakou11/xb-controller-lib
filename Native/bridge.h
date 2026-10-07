@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-// C# と共有する ABI。追加・変更時はバージョンも変更する。
+// ABI 変更時は version も更新する。
 constexpr std::uint32_t xb_abi_version = 1;
 constexpr std::uint64_t xb_guide = 1ull << 32;
 constexpr std::uint64_t xb_share = 1ull << 33;

@@ -16,7 +16,6 @@ namespace XbController.Editor
 
         private static void AutoSetup()
         {
-            // バッチ検証で Editor の再起動を発生させない。明示メニューはバッチでも検証可能。
             if (!Application.isBatchMode) EnableInput();
         }
 
@@ -29,7 +28,7 @@ namespace XbController.Editor
             var handler = settings.FindProperty("activeInputHandler");
             if (handler == null) { Debug.LogError("Xbox Controller: 入力設定を取得できません。"); return; }
             if (handler.intValue != 0) return;
-            // 0=旧入力、1=Input System、2=Both は Unity の PlayerSettings 契約。
+            // Unity 契約: 0=Legacy、1=New、2=Both。
             handler.intValue = 2;
             settings.ApplyModifiedPropertiesWithoutUndo();
             AssetDatabase.SaveAssets();

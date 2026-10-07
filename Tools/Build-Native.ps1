@@ -1,4 +1,3 @@
-# 固定 SDK とローカル MSVC を使い Windows x64 DLL を再現可能にビルドする。
 [CmdletBinding()]
 param([string]$CMake, [string]$SdkPath)
 $ErrorActionPreference = 'Stop'
