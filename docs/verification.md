@@ -84,6 +84,22 @@ pwsh -NoProfile -File Tools/Test-Rumble.ps1
 
 ## 再実行と未実施
 
+### 2026年10月8日の継続調査
+
+Issue #1 と PR #2 は open、PR は draft ではなく、再開時の公開 head は `b8209c6aa21e40c2c68b4ab934c2542e14fc48d8`。作業ツリーは clean、配布 DLL の SHA-256 は上記最終 DLL と一致した。GitHub API の PR 全変更77ファイルについて、公開 blob SHA とローカル `git hash-object` が全件一致した。引き継ぎ文の17ファイルという値は PR 全体の件数として採用しない。
+
+既存 Release テストバイナリの CTest を再実行し、native/GATT の2/2が成功した。今回は再ビルド、Unity Play、追加の物理パドル・振動試験を実施していない。公開 PnP の present 一覧に Bluetooth と XboxComposite の項目があり、既存の受信専用 `Tools/Probe-Controller.ps1 -Seconds 0` は GameInput 接続1台、callback/read 診断 S_OK、中立状態を返した。この metadata と初期 snapshot は現在の接続方式・firmware・独立パドル受信を証明しない。
+
+独立した一次資料調査と別の独立設計評価で、USB supplement の identity と DLL 寿命を再検討した。[FindDeviceFromPlatformString](https://learn.microsoft.com/en-us/gaming/gdk/docs/reference/input/gameinput/interfaces/igameinput/methods/igameinput_finddevicefromplatformstring) は一致する platform string から GameInput 装置を取得する API だが、WGI の任意の ID を必ず受け付ける契約ではない。過去に失敗した未変更 ID/PnP 照会は繰り返していない。WGI 内の controlling IUnknown 一致から、別 API の GameInput token/container の同一性は導けない。
+
+追加候補の [FindDeviceFromObject](https://learn.microsoft.com/en-us/gaming/gdk/docs/reference/input/gameinput/deprecated/interfaces/igameinput/methods/igameinput_finddevicefromobject?view=gdk-2604) は、Microsoft が v0 でも未実装で E_NOTIMPL を返し、v1で削除したと明記しているため採用しない。[NonRoamableId](https://learn.microsoft.com/en-us/uwp/api/windows.gaming.input.rawgamecontroller.nonroamableid?view=winrt-26100) は application ごとに異なる ID であり、公開 PnP/GameInput ID への変換契約は確認できなかった。
+
+[GameControllerFactoryManager](https://learn.microsoft.com/en-us/uwp/api/windows.gaming.input.custom.gamecontrollerfactorymanager?view=winrt-26100) の公開一覧には登録と WGI 内の関連づけがあるが、factory の登録解除はない。scratch EXE のプロセス寿命までの資源保持を DLL に移しても、callback/vtable が参照する DLL コードの unload 安全性は確立しない。別プロセス化はこの寿命を隔離する候補だが、WGI と GameInput の正確な identity を解決しない。IPC、終了・再起動、欠落時の edge、foreground 受信条件の新しい検証も必要となるため、同等の小さな修正とは扱わない。
+
+参考 SDL branch の [WGI source](https://github.com/hifihedgehog/SDL/blob/1d2bf1f9b334ae791266bf332d534d73f34f2ccc/src/joystick/windows/SDL_xinput_paddle_wgi.cpp) を現在の commit `1d2bf1f9b334ae791266bf332d534d73f34f2ccc` で確認した。provider ID の解析と `GET_MODULE_HANDLE_EX_FLAG_PIN` が存在するが、これを公開 GameInput identity の根拠や unload 完了の証拠には使わない。source 冒頭の zlib notice と、ローカル改変 probe の notice・改変版表示を確認した。追加コードは採用していない。
+
+現時点で既存契約を保つ新しい USB 製品経路は確立できず、runtime・ABI・配布 DLL は変更しない。USB を採用する前提は、公開 API による対象 GameInput device/container との検証可能な関連づけと、callback 完了後の安全な終了を示す設計・証拠の両方である。独立4パドルの Bluetooth 実機結果を記載する既存受け入れ条件は変更しない。GitHub Actions、有料サービス、merge、controller 設定変更は行っていない。
+
 ### USB provider 経路の評価結果
 
 非公開 ControllerInitialize COM contract の sourced IID と aggregation を使う別 EXEで、公開 WGI factory/sink の初期化と公式 `TryGetFactoryControllerFromGameController` による controlling identity の一致を確認した。最初の背景受信8秒は正常報告0であり、受信成功と扱わない。foreground の試験ウィンドウをユーザーが操作した記録では、normal60、resumed1、suspended1、47-byte LowLatency/id0 報告を受信した。ユーザーの A・4パドル操作で byte14 の独立 `4/1/8/2` と解放0を確認した。装置への enable 命令は送っていない。
