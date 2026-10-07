@@ -12,7 +12,9 @@ if (-not $CMake) {
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
         if (-not (Test-Path -LiteralPath $vswhere)) { throw 'CMake または Visual Studio C++ ツールが必要です。' }
         $installation = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($installation)) { throw 'Visual Studio C++ ツールが見つかりません。' }
         $CMake = Join-Path $installation 'Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe'
+        if (-not (Test-Path -LiteralPath $CMake -PathType Leaf)) { throw "CMake が見つかりません: $CMake" }
     }
 }
 if (-not $SdkPath) {

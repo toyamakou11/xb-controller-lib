@@ -100,6 +100,18 @@ Issue #1 と PR #2 は open、PR は draft ではなく、再開時の公開 hea
 
 現時点で既存契約を保つ新しい USB 製品経路は確立できず、runtime・ABI・配布 DLL は変更しない。USB を採用する前提は、公開 API による対象 GameInput device/container との検証可能な関連づけと、callback 完了後の安全な終了を示す設計・証拠の両方である。独立4パドルの Bluetooth 実機結果を記載する既存受け入れ条件は変更しない。GitHub Actions、有料サービス、merge、controller 設定変更は行っていない。
 
+### CodeRabbit 指摘への対応
+
+2026年10月8日。`XboxControllers.PollNative` の容量交渉を初回呼び出しと最大4回の再試行に変更した。native が返した必要台数だけ配列を拡張し、なお InsufficientBuffer なら既存 Controller と診断を保持して次の更新へ進む。容量不足で全参照を無効化しない。他の負の結果では既存の停止・無効化処理を保持する。`Build-Native.ps1` は vswhere の終了コードと空白の installationPath、探索した cmake.exe の存在を検査し、SDK 処理前に原因を明示する。
+
+独立設計評価と最終差分レビューを実施した。`Tools/Test-NativePolling.ps1` は実際の facade source を合成 NativeApi/Unity 型とコンパイルし、連続拡張、呼び出し上限、参照・診断保持、次回の復旧、成功時の切断反映、配列再利用、致命的失敗を10 assertionsで検証した。変更前 source では連続拡張の検証が失敗し、変更後は全件成功した。これは facade の分岐・参照保持の合成検証であり、実機 hotplug や実モーター停止の証拠ではない。探索部分の実 script AST を使うローカル合成検査では、vswhere 失敗・空値・空白値・CMake 欠落・正常の5条件が成功した。
+
+通常の native build script で構成・ビルドと CTest 2/2が成功し、配布 DLL の SHA-256 は `602FAAA8D310424C70A2C20D4CA0E380F12D1D56C8634EE83C09F6CA5F5F6CC5` のまま。Unity Play 再実行は Editor license が見つからず exit198で開始前に失敗した。そこで既存 Unity 6000.3.20f1 の compiler response と実 Input System 1.19.0/Unity 参照を用い、変更後の runtime source 全体を C#9・Windows define・警告をエラー扱いで別出力へコンパイルし、成功を確認した。これは今回の実 Play108 assertions成功ではなく、以前の Play 記録と区別する。追加実機試験と GitHub Actions は実施していない。
+
+```powershell
+pwsh -NoProfile -File Tools/Test-NativePolling.ps1
+```
+
 ### USB provider 経路の評価結果
 
 非公開 ControllerInitialize COM contract の sourced IID と aggregation を使う別 EXEで、公開 WGI factory/sink の初期化と公式 `TryGetFactoryControllerFromGameController` による controlling identity の一致を確認した。最初の背景受信8秒は正常報告0であり、受信成功と扱わない。foreground の試験ウィンドウをユーザーが操作した記録では、normal60、resumed1、suspended1、47-byte LowLatency/id0 報告を受信した。ユーザーの A・4パドル操作で byte14 の独立 `4/1/8/2` と解放0を確認した。装置への enable 命令は送っていない。
