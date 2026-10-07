@@ -119,6 +119,18 @@ pwsh -NoProfile -File Tools/Test-NativePolling.ps1
 
 全入力を WGI に置き換える案もレビューしたが、最新 snapshot だけでは既存の短い edge/history 契約を保てず、Guide/Share・実モーター能力にも同等の公開情報がない。4 vibration 値を少ないモーターへ合成する WGI の仕様を独立4モーターの能力と扱わない。従って製品は GameInput 標準入力・出力と公開 Bluetooth GATT supplement を保持する。USB のこの別 EXE は検証資料だけで、UPM/DLLに同梱しない。USB 独立パドルの製品対応を達成したとは報告しない。
 
+### Issue #3: USB 実装の保留条件（2026年10月8日）
+
+[Issue #3](https://github.com/toyamakou11/xb-controller-lib/issues/3) の独立設計レビューでは、上記の受信・identity 評価を再利用し、現時点の製品採用を保留した。失敗した実機照会は再実行していない。
+
+- identity: WGI 内の controlling identity 一致は GameInput との同一性ではない。公開 ID/PnP の照会失敗を VID/PID・接続順・文字列加工で補完しない。
+- DLL 寿命: [公開 factory API](https://learn.microsoft.com/en-us/uwp/api/windows.gaming.input.custom.gamecontrollerfactorymanager?view=winrt-26100) に登録解除はなく、参考実装は module pin を使う。非公開 ControllerInitialize と process 終了に依存する別 EXE の結果は、DLL の callback 停止・終了・再初期化の証拠にならない。
+- 契約: WGI 全置換では短い入力 edge/history、Guide/Share、実4モーター能力の同等性を確認できない。ABI v1・80 bytes と既存 backend を保持し、USB decoder・enable 命令は追加しない。
+
+再開には、未試行の公開仕様に基づく厳密な装置連結と、callback を停止して所有資源を安全に解放できる経路の両方が必要。その後に4個別・同時・解放・ABXY独立性と再接続・終了を実機検証する。Issue は未完了のまま保持する。
+
+今回のローカル確認は既存 native CTest 2/2 と実 facade 合成10 assertions が成功。文書のみの変更で、再ビルド・Unity Play・追加実機試験は実施していない。controller 設定、Actions、paid service は変更・使用していない。
+
 Tools/Test-Unity.ps1 -UnityEditor '<installed Editor path>' は専用一時プロジェクトを使い、既存 Unity プロジェクトを変更しない。Tools/Probe-Controller.ps1 -Seconds 30 は接続と変化 snapshot を表示する。SDK と .verification/ の証拠は Git 対象外。
 
 振動のBluetooth / Xbox Wireless Adapter、実機でのフォーカス喪失・振動中の切断・終了停止、同時4モーター出力、IL2CPP Player、複数実機 hotplug、他 Xbox 機種、異なる firmware は未検証。振動の所有権・focus・切断・終了の停止条件は合成回帰で確認している。Unity import はローカル .verification フォルダー名の警告を出したがコンパイル・Play 検証は成功。GitHub Actions は実行・追加していない。Bluetooth の独立4パドル条件と最終 Unity 再実行は成功。PR の merge はユーザー承認なしに実行しない。USB 独立パドルの製品対応は未達として扱う。
