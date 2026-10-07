@@ -1,0 +1,6 @@
+{
+  "name": "XbController.Runtime",
+  "rootNamespace": "XbController",
+  "references": ["Unity.InputSystem"],
+  "allowUnsafeCode": false
+}

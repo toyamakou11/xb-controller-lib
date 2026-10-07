@@ -1,0 +1,6 @@
+.verification/
+Native/build/
+*.user
+*.pdb
+*.ilk
+*.obj
