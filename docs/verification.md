@@ -139,6 +139,14 @@ pwsh -NoProfile -File Tools/Test-NativePolling.ps1
 
 Astra の独立レビューも raw 受信と USB パドル達成を分離した。focus は batch ごとの検査、履歴 gap は386件、同値 baseline は変化ログから省略され得るため、連続履歴・edge・lifecycle の実機合格とは扱わない。18-byte framing の意味は未確定。WGI decoder・enable 命令・設定変更は追加せず、Issue #3 と PR #21 の実装保留を維持する。
 
+### GameInput foreground mapper の追加確認（2026年10月9日）
+
+公式 GameInput だけを使う受信専用 foreground 窓で1台を列挙し、18個の controller button と GameInput mapper の4個の paddle mapping を取得した。mapping は異なる Button index `14/15/16/17`、label は公式 `XboxPaddle1〜4`。同じ `GameInputKindGamepad` reading から標準 state と全 controller button state を読み、focus 後の新しい timestamp に限って記録した。21件の state 変化で標準ボタンは変化したが、mapper が指す4 index はすべて0だった。通常の button state 配列では index `0〜3` に変化があり、paddle index `14〜17` は0のままだった。
+
+ユーザーは指示した個別・同時・ABXY 操作を完了したと回答した。記録に操作段階の印はなく、650件の履歴 gap を伴う試験を中断したため最終終了行もない。`GAMEINPUT_E_REFERENCE_READING_TOO_OLD` から再同期した後の21件だけを記録したので、個別位置・同時押下・解放・ABXY 独立性を段階別に立証した扱いにはしない。この結果は foreground 条件下でも GameInput の公式 paddle mapper 値を得られなかった観測であり、GameInput の短い edge/history を満たす新しい実装経路ではない。試験中に機器への出力、設定変更、enable 命令は行っていない。
+
+同じ GameInput device の公開 `pnpPath` を公開 Configuration Manager API で解決し、その HID/USB instance と USB 親 instance の `ContainerId` が GameInput `containerId` と一致することを確認した。これは GameInput device の PnP container を特定する証拠であり、WGI `NonRoamableId` / provider ID から同じ container へ結ぶ公開契約や安全な factory callback 終了の証拠ではない。
+
 Tools/Test-Unity.ps1 -UnityEditor '<installed Editor path>' は専用一時プロジェクトを使い、既存 Unity プロジェクトを変更しない。Tools/Probe-Controller.ps1 -Seconds 30 は接続と変化 snapshot を表示する。SDK と .verification/ の証拠は Git 対象外。
 
 振動のBluetooth / Xbox Wireless Adapter、実機でのフォーカス喪失・振動中の切断・終了停止、同時4モーター出力、IL2CPP Player、複数実機 hotplug、他 Xbox 機種、異なる firmware は未検証。振動の所有権・focus・切断・終了の停止条件は合成回帰で確認している。Unity import はローカル .verification フォルダー名の警告を出したがコンパイル・Play 検証は成功。GitHub Actions は実行・追加していない。Bluetooth の独立4パドル条件と最終 Unity 再実行は成功。PR の merge はユーザー承認なしに実行しない。USB 独立パドルの製品対応は未達として扱う。
