@@ -5,6 +5,7 @@ Inherit the global workflow and efficiency rules. Load this file only for develo
 - Establish the repository root, branch, relevant instructions, affected entry points, runtime, and verification commands. Preserve uncommitted user changes.
 - Trace affected behavior and contracts. Design the smallest adequate change; evaluate failure cases, compatibility, security, maintenance, and performance. Obtain independent design review for consequential changes when available.
 - Prefer existing architecture and native tools. Add abstractions or dependencies only for demonstrated needs. Delegate disjoint implementation after agreeing interfaces and ownership; serialize integration.
+- Reuse Unity Input System and GameInput for standard input and rumble. Independent paddle protocols are outside product scope.
 - Add regression tests for meaningful behavior changes. For low-impact reversible edits, use focused checks instead of implementation-mirroring tests. Run required gates and integration or visual checks relevant to actual behavior.
 - If debugging stalls, retain evidence and seek an independent reassessment instead of blind retries. Benchmark performance-sensitive changes with comparable inputs, repetitions, environment, and correctness evidence.
 - Independently review the final diff when useful; fix actionable findings and rerun affected checks. Never repeat unchanged full suites without a reason.

@@ -26,6 +26,7 @@ namespace XbController.Verification
     public static class Verification
     {
         private static int assertions;
+        private const XboxButton FaceButtons = XboxButton.A | XboxButton.B | XboxButton.X | XboxButton.Y;
         private const string Pending = "XbControllerVerificationPending";
         static Verification()
         {
@@ -107,7 +108,7 @@ namespace XbController.Verification
                 Controller pad = null;
                 foreach (var item in XboxControllers.All) if (item.UnityDevice == first) pad = item;
                 Check(pad != null, "接続通知");
-                Check(!pad.Supports(XboxButton.Paddles), "非対応パドルを偽装しない");
+                Check(pad.Supports(FaceButtons), "標準4ボタンの対応情報");
                 var unityButtons = new[] { GamepadButton.Start, GamepadButton.Select, GamepadButton.A, GamepadButton.B,
                     GamepadButton.X, GamepadButton.Y, GamepadButton.DpadUp, GamepadButton.DpadDown,
                     GamepadButton.DpadLeft, GamepadButton.DpadRight, GamepadButton.LeftShoulder, GamepadButton.RightShoulder,
@@ -156,34 +157,34 @@ namespace XbController.Verification
                     Check(native.Supports(button) && native.IsPressed(button) && native.WasPressed(button) && native.WasReleased(button), "native フラグ " + button);
                 }
                 snapshot.Buttons = 0;
-                snapshot.Pressed = snapshot.Released = (ulong)XboxButton.Paddles;
+                snapshot.Pressed = snapshot.Released = (ulong)FaceButtons;
                 native.Update(snapshot);
-                Check(!native.IsPressed(XboxButton.Paddles) && native.WasPressed(XboxButton.Paddles) && native.WasReleased(XboxButton.Paddles), "短い押下の両エッジ");
+                Check(!native.IsPressed(FaceButtons) && native.WasPressed(FaceButtons) && native.WasReleased(FaceButtons), "短い押下の両エッジ");
                 snapshot.Error = unchecked((int)0x80004005); native.Update(snapshot);
-                Check(!native.WasPressed(XboxButton.Paddles) && native.LeftTrigger == 0, "取得失敗は中立");
+                Check(!native.WasPressed(FaceButtons) && native.LeftTrigger == 0, "取得失敗は中立");
                 snapshot.Error = NativeApi.HistoryResync; native.Update(snapshot);
-                Check(native.WasPressed(XboxButton.Paddles), "履歴再同期後の有効値");
+                Check(native.WasPressed(FaceButtons), "履歴再同期後の有効値");
                 Check(!native.SetRumble(float.NaN, 0), "不正振動値");
                 native.Invalidate();
                 Check(!native.IsConnected && native.LeftStick == Vector2.zero, "native 古い参照");
 
                 var focusMethod = typeof(XboxControllers).GetMethod("FocusChanged", BindingFlags.NonPublic | BindingFlags.Static);
                 focusMethod.Invoke(null, new object[] { false });
-                var benchSnapshot = new NativeSnapshot { Token = 20, Supported = (ulong)XboxButton.Paddles, Buttons = (ulong)XboxButton.Paddles, LeftX = 0.5f };
+                var benchSnapshot = new NativeSnapshot { Token = 20, Supported = (ulong)FaceButtons, Buttons = (ulong)FaceButtons, LeftX = 0.5f };
                 var bench = new Controller(benchSnapshot);
-                Check(!bench.IsPressed(XboxButton.Paddles), "フォーカス喪失");
+                Check(!bench.IsPressed(FaceButtons), "フォーカス喪失");
                 focusMethod.Invoke(null, new object[] { true });
                 Benchmark(bench);
                 var registry = (System.Collections.Generic.List<Controller>)typeof(XboxControllers)
                     .GetField("controllers", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
-                benchSnapshot.Pressed = benchSnapshot.Released = (ulong)XboxButton.Paddles;
+                benchSnapshot.Pressed = benchSnapshot.Released = (ulong)FaceButtons;
                 benchSnapshot.LeftTrigger = 1;
                 bench.Update(benchSnapshot);
                 registry.Add(bench);
                 focusMethod.Invoke(null, new object[] { false });
                 focusMethod.Invoke(null, new object[] { true });
-                Check(registry.Contains(bench) && bench.IsConnected && !bench.IsPressed(XboxButton.Paddles) &&
-                    !bench.WasPressed(XboxButton.Paddles) && !bench.WasReleased(XboxButton.Paddles) &&
+                Check(registry.Contains(bench) && bench.IsConnected && !bench.IsPressed(FaceButtons) &&
+                    !bench.WasPressed(FaceButtons) && !bench.WasReleased(FaceButtons) &&
                     bench.LeftStick == Vector2.zero && bench.LeftTrigger == 0, "フォーカス復帰時のキャッシュ中立化");
                 registry.Remove(bench);
                 XboxControllers.Shutdown(); XboxControllers.Initialize(ControllerBackend.UnityInputSystem);
@@ -208,8 +209,8 @@ namespace XbController.Verification
                 for (int i = 0; i < 100000; i++)
                 {
                     checksum += pad.LeftStick.x + pad.RightStick.y + pad.LeftTrigger + pad.RightTrigger;
-                    if (pad.IsPressed(XboxButton.PaddleLeft1)) checksum += 1;
-                    pad.WasPressed(XboxButton.PaddleRight1); pad.WasReleased(XboxButton.PaddleRight2);
+                    if (pad.IsPressed(XboxButton.A)) checksum += 1;
+                    pad.WasPressed(XboxButton.X); pad.WasReleased(XboxButton.Y);
                 }
                 watch.Stop();
                 long bytes = GC.GetAllocatedBytesForCurrentThread() - before;

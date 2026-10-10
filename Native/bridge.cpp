@@ -1,10 +1,8 @@
 #include "bridge.h"
-#include "gatt_paddles.h"
 #include <Windows.h>
 #include <GameInput.h>
 #include <wrl/client.h>
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <memory>
 #include <mutex>
@@ -14,40 +12,13 @@ using namespace GameInput::v3;
 using Microsoft::WRL::ComPtr;
 
 namespace {
-constexpr std::array<GameInputGamepadButtons, 4> paddleButtons{
-    GameInputGamepadPaddleLeft1, GameInputGamepadPaddleLeft2,
-    GameInputGamepadPaddleRight1, GameInputGamepadPaddleRight2};
-constexpr std::uint32_t paddleMask = GameInputGamepadModulePaddles4;
-// https://github.com/hifihedgehog/SDL/blob/feat/hidmaestro-filter/docs/README-xinput-paddles.md
-std::uint32_t PaddleMask(std::uint8_t bits) noexcept {
-    return ((bits & 1) ? GameInputGamepadPaddleRight1 : 0u)
-        | ((bits & 2) ? GameInputGamepadPaddleRight2 : 0u)
-        | ((bits & 4) ? GameInputGamepadPaddleLeft1 : 0u)
-        | ((bits & 8) ? GameInputGamepadPaddleLeft2 : 0u);
-}
-constexpr std::array<GameInputGamepadButtons, 26> standardButtons{
-    GameInputGamepadMenu, GameInputGamepadView, GameInputGamepadA, GameInputGamepadB,
-    GameInputGamepadX, GameInputGamepadY, GameInputGamepadC, GameInputGamepadZ,
-    GameInputGamepadDPadUp, GameInputGamepadDPadDown, GameInputGamepadDPadLeft, GameInputGamepadDPadRight,
-    GameInputGamepadLeftShoulder, GameInputGamepadRightShoulder,
-    GameInputGamepadLeftThumbstick, GameInputGamepadRightThumbstick,
-    GameInputGamepadLeftTriggerButton, GameInputGamepadRightTriggerButton,
-    GameInputGamepadLeftThumbstickUp, GameInputGamepadLeftThumbstickDown,
-    GameInputGamepadLeftThumbstickLeft, GameInputGamepadLeftThumbstickRight,
-    GameInputGamepadRightThumbstickUp, GameInputGamepadRightThumbstickDown,
-    GameInputGamepadRightThumbstickLeft, GameInputGamepadRightThumbstickRight};
-struct RawButton { std::uint32_t mask, index; };
+constexpr auto standardButtons = GameInputGamepadLayoutStandard | GameInputGamepadC | GameInputGamepadZ;
 struct Device {
     ComPtr<IGameInputDevice> device;
     ComPtr<IGameInputReading> reading;
     XbSnapshot state{};
     std::uint64_t system{}, systemPressed{}, systemReleased{};
-    std::vector<RawButton> rawMappings;
-    std::unique_ptr<bool[]> rawButtons;
-    std::uint32_t rawCount{}, rawMask{};
     bool ownsRumble{};
-    bool supplemental{}, suppressPaddleEdges{};
-    std::uint64_t mappedSupported{};
 };
 struct Context {
     ComPtr<IGameInput> input;
@@ -85,7 +56,6 @@ void CALLBACK DeviceChanged(GameInputCallbackToken, void* data, IGameInputDevice
         if (!(current & GameInputDeviceConnected)) {
             if (found != c.devices.end()) {
                 StopOwnedRumble(*found);
-                xb_gatt::Detach(found->state.token);
                 c.devices.erase(found);
             }
             return;
@@ -98,50 +68,10 @@ void CALLBACK DeviceChanged(GameInputCallbackToken, void* data, IGameInputDevice
         Device entry;
         entry.device = device;
         entry.state.token = nextToken++;
-        entry.state.supported = static_cast<std::uint32_t>(info->gamepadInfo->supportedLayout)
+        entry.state.supported = static_cast<std::uint32_t>(info->gamepadInfo->supportedLayout & standardButtons)
             | SystemMask(info->supportedSystemButtons);
         entry.state.rumble = static_cast<std::uint32_t>(info->supportedRumbleMotors);
-        if (info->controllerInfo && (info->supportedInput & GameInputKindControllerButton)) {
-            ComPtr<IGameInputMapper> mapper;
-            if (SUCCEEDED(device->CreateInputMapper(&mapper))) {
-                for (auto paddle : paddleButtons) {
-                    GameInputButtonMapping mapping{};
-                    if (mapper->GetGamepadButtonMappingInfo(paddle, &mapping)
-                        && mapping.controllerElementKind == GameInputElementKindButton
-                        && mapping.controllerIndex < info->controllerInfo->controllerButtonCount)
-                        entry.rawMappings.push_back({static_cast<std::uint32_t>(paddle), mapping.controllerIndex});
-                }
-                std::uint32_t duplicateMask{};
-                for (std::size_t i = 0; i < entry.rawMappings.size(); ++i)
-                    for (std::size_t j = i + 1; j < entry.rawMappings.size(); ++j)
-                        if (entry.rawMappings[i].index == entry.rawMappings[j].index)
-                            duplicateMask |= entry.rawMappings[i].mask | entry.rawMappings[j].mask;
-                for (auto standard : standardButtons) {
-                    GameInputButtonMapping mapping{};
-                    if (!mapper->GetGamepadButtonMappingInfo(standard, &mapping)
-                        || mapping.controllerElementKind != GameInputElementKindButton) continue;
-                    for (const auto& paddle : entry.rawMappings)
-                        if (paddle.index == mapping.controllerIndex) duplicateMask |= paddle.mask;
-                }
-                if (duplicateMask) {
-                    entry.state.supported &= ~static_cast<std::uint64_t>(duplicateMask);
-                    c.callbackError = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-                    entry.rawMappings.erase(std::remove_if(entry.rawMappings.begin(), entry.rawMappings.end(),
-                        [duplicateMask](const RawButton& mapping) { return (mapping.mask & duplicateMask) != 0; }), entry.rawMappings.end());
-                }
-                if (!entry.rawMappings.empty()) {
-                    entry.rawCount = info->controllerInfo->controllerButtonCount;
-                    entry.rawButtons = std::make_unique<bool[]>(entry.rawCount);
-                    for (const auto& mapping : entry.rawMappings) entry.rawMask |= mapping.mask;
-                    entry.state.supported |= entry.rawMask;
-                }
-            }
-        }
-        entry.mappedSupported = entry.state.supported;
-        const auto token = entry.state.token;
-        const auto container = info->containerId;
         c.devices.push_back(std::move(entry));
-        xb_gatt::Attach(token, container);
     } catch (...) {
         std::lock_guard<std::mutex> lock(c.mutex);
         c.callbackError = E_OUTOFMEMORY;
@@ -166,21 +96,10 @@ void CALLBACK SystemChanged(GameInputCallbackToken, void* data, IGameInputDevice
 bool Apply(Device& entry, IGameInputReading* reading, bool edges) noexcept {
     GameInputGamepadState value{};
     if (!reading->GetGamepadState(&value)) return false;
-    auto buttons = static_cast<std::uint32_t>(value.buttons) & entry.state.supported;
-    if (!entry.supplemental && !entry.rawMappings.empty()) {
-        const auto returned = reading->GetControllerButtonState(entry.rawCount, entry.rawButtons.get());
-        buttons &= ~static_cast<std::uint64_t>(entry.rawMask);
-        for (const auto& mapping : entry.rawMappings) {
-            if (mapping.index >= returned) return false;
-            if (entry.rawButtons[mapping.index]) buttons |= mapping.mask;
-        }
-    }
-    if (entry.supplemental) buttons &= ~static_cast<std::uint64_t>(paddleMask);
+    const auto buttons = static_cast<std::uint32_t>(value.buttons & standardButtons) & entry.state.supported;
     if (edges) {
-        const auto compare = entry.supplemental || entry.suppressPaddleEdges
-            ? (0xFFFFFFFFull & ~static_cast<std::uint64_t>(paddleMask)) : 0xFFFFFFFFull;
-        entry.state.pressed |= buttons & ~entry.state.buttons & compare;
-        entry.state.released |= entry.state.buttons & ~buttons & compare;
+        entry.state.pressed |= buttons & ~entry.state.buttons;
+        entry.state.released |= entry.state.buttons & ~buttons;
     }
     entry.state.buttons = buttons;
     entry.state.timestamp = reading->GetTimestamp();
@@ -254,8 +173,6 @@ std::int32_t __cdecl xb_initialize(std::uint32_t version, std::uint32_t size) no
         auto& c = *context;
         auto hr = GameInputCreate(&c.input);
         if (FAILED(hr)) { context.reset(); return hr; }
-        hr = xb_gatt::Initialize();
-        if (FAILED(hr)) c.callbackError = hr;
         // 入力公開の focus 制限は C# 側で行う。
         c.input->SetFocusPolicy(GameInputEnableBackgroundInput);
         // 同期 callback を呼ぶため mutex を保持しない。
@@ -276,8 +193,6 @@ std::int32_t __cdecl xb_shutdown() noexcept {
         c.stopping = true;
         for (auto& entry : c.devices) StopOwnedRumble(entry);
     }
-    const auto gattResult = xb_gatt::Shutdown();
-    if (FAILED(gattResult)) return gattResult;
     // callback 待機中は mutex を保持しない。
     if (c.deviceCallback && !c.input->UnregisterCallback(c.deviceCallback)) return E_FAIL;
     c.deviceCallback = 0;
@@ -300,21 +215,7 @@ std::int32_t __cdecl xb_poll(XbSnapshot* buffer, std::uint32_t capacity, std::ui
     const auto cutoff = c.input->GetCurrentTimestamp();
     for (std::uint32_t i = 0; i < *count; ++i) {
         auto& entry = c.devices[i];
-        const auto sample = xb_gatt::Poll(entry.state.token);
-        entry.suppressPaddleEdges = entry.supplemental != sample.received;
-        entry.supplemental = sample.received;
-        entry.state.supported = entry.mappedSupported | (sample.received ? paddleMask : 0u);
-        if (sample.received || entry.suppressPaddleEdges)
-            entry.state.buttons &= ~static_cast<std::uint64_t>(paddleMask);
         Poll(c, entry, cutoff);
-        // 標準履歴の再同期は GATT edge を破棄しない。
-        if (sample.received && (SUCCEEDED(entry.state.error) || entry.state.error == GAMEINPUT_E_REFERENCE_READING_TOO_OLD)) {
-            entry.state.buttons |= PaddleMask(sample.buttons);
-            entry.state.pressed |= PaddleMask(sample.pressed);
-            entry.state.released |= PaddleMask(sample.released);
-        }
-        if (FAILED(sample.error) && SUCCEEDED(*diagnostic)) *diagnostic = sample.error;
-        entry.suppressPaddleEdges = false;
         buffer[i] = entry.state;
     }
     return S_OK;
@@ -347,7 +248,6 @@ std::int32_t __cdecl xb_rumble(std::uint64_t token, float low, float high, float
 void __cdecl xb_resync() noexcept {
     if (!context) return;
     std::lock_guard<std::mutex> lock(context->mutex);
-    xb_gatt::Resync();
     for (auto& entry : context->devices) {
         Neutral(entry, S_OK);
         entry.systemPressed = entry.systemReleased = 0;

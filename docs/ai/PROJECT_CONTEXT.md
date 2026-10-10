@@ -1,22 +1,19 @@
 # Project context
 
-Replace TODO fields using verified repository evidence. Keep this file short; link detailed specifications instead of copying them. Do not store secrets or personal machine configuration.
+- Objective: Build an installable Unity UPM wrapper for standard controller input and rumble.
+- Scope: Reuse Unity Input System and GameInput. Treat remapped paddles as ordinary assigned buttons.
+- Exclusions: Independent paddle input, vendor GATT, USB raw reports, WGI helpers, driver changes, and automatic controller profile changes.
+- Acceptance criteria: See docs/design.md. Independent paddle detection is not a completion requirement.
+- Versions: Unity 6000.3+, Input System 1.19.0, Microsoft.GameInput SDK 3.5.283, and GameInput v3 runtime for the Windows backend.
+- Architecture: C# facade; Unity Gamepad backend; Windows x64 C++17 GameInput bridge for input history and four-motor rumble.
+- Entry points: Runtime/XboxControllers.cs, Runtime/Controller.cs, Native/bridge.cpp, and Editor/ControllerSetup.cs.
+- Contracts: Main-thread access, read-only device list, neutral stale references, owned-rumble stopping, ABI v1, and 80-byte snapshots.
+- Migration: Version 0.2.0 removes paddle-specific enum members. Standard button values and rumble APIs remain unchanged.
+- Checks: Tools/Build-Native.ps1, Tools/Test-NativePolling.ps1, and Tools/Test-Unity.ps1 with an installed Editor path.
+- Evidence: See docs/verification.md for current checks. Preserve earlier hardware and research results in docs/archive/verification-20261010.md.
+- Constraints: Do not install runtimes silently, alter existing Unity projects, or use GitHub Actions.
+- Test resources: Use .verification/ and the dedicated temporary Unity verification project.
+- Publication: Use focused codex/ branches and Japanese Issue-linked PRs. Merge requires authorization.
+- Open checks: IL2CPP Player, multiple physical devices, other transports, and physical focus-loss and disconnect rumble stopping.
 
-- Objective: An installable Unity UPM library for standard Xbox inputs and four independent Elite Series 2 paddles.
-- In scope / out of scope: Unity C# facade and Windows x64 C++ GameInput bridge; no guessed hardware mappings, no Profile/Pair game-button emulation.
-- Acceptance criteria: See docs/design.md. Independent paddles require hardware evidence, not fallback success.
-- Runtime and supported versions: Unity 6000.3+, Input System 1.19.0; native SDK Microsoft.GameInput 3.5.283, paddle runtime support introduced in 3.3.
-- Architecture and entry points: Runtime/XboxControllers.cs, Native/bridge.cpp, and Native/gatt_paddles.cpp; C++20 WinRT GATT supplement with exact ContainerId binding; Editor auto setup and diagnostics.
-- Public interfaces and data invariants: Read-only controller list; supported capability separate from pressed state; invalid references read neutral; ABI v1 pack 8, 80 bytes.
-- Build command: Tools/Build-Native.ps1; CMake + MSVC /W4 /WX and CTest.
-- Unit / regression test command: Tools/Test-NativePolling.ps1 (10 synthetic assertions); Tools/Test-Unity.ps1 -UnityEditor '<installed Editor path>' (prior actual Play: 108 assertions; 2026-10-08 retry blocked by Editor license, actual Unity-reference runtime compilation passed).
-- Lint / type-check command: MSVC /W4 /WX and actual Unity script compilation.
-- Integration / visual verification and prerequisites: Unity 6000.3.20f1; Elite Series 2 Core tested over Bluetooth and USB-C; approved GameInput 3.5.283 runtime installed.
-- Performance-sensitive paths and benchmark command: Cached public reads measured by Unity runner in 5 trials with zero managed allocations; fixture differences preclude relative speed claims.
-- Dedicated test resources and data-safety constraints: .verification/ only; do not alter existing Unity projects or controller profiles; exclude SDK and local evidence from Git.
-- Default branch and publication policy: main; focused codex/ branch, Japanese commits and Issue-linked PR; do not merge without authorization; no hosted CI.
-- Authoritative specifications: Official Microsoft SDK header and sources linked in docs/design.md.
-- Confirmed decisions: Independent design and implementation reviews; Bluetooth vendor GATT physically receives four independent paddles (5.23.6.0/profile 1), individual/simultaneous press-release, ABXY independence; native ABI remains 80 bytes. No service-memory offsets, ABXY inference, firmware whitelist, or downgrade.
-- Open questions / assumptions: USB-C rumble at 0.25 / 700 ms confirmed for all four individual motors and stopping. A focused raw-report run received valid 18-byte reports; a separate focused GameInput mapper run recorded ordinary button changes while all four official paddle mapper indices remained 0. USB independent paddles remain unavailable through the verified public route. GameInput PnP ContainerId was confirmed, but WGI-to-GameInput identity and safe factory callback shutdown remain unresolved. Physical lifecycle and other firmware/transport results must remain distinct from synthetic tests. See docs/verification.md.
-
-Use `Not applicable` only with a reason. Update facts when the project changes; do not turn this file into a running transcript.
+Do not promote optional backend features into requirements without an explicit user request.
