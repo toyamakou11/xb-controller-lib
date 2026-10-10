@@ -39,6 +39,6 @@ Elite Series 2 Core / firmware 5.23.6.0 の USB-C 接続で、本体低周波、
 
 ## 未検証範囲
 
-今回の整理後 DLL での物理振動の再試験は行っていません。Bluetooth / Wireless Adapter のモーター、実 Unity ウィンドウのフォーカス喪失、振動中の切断・終了、複数実機、他機種、IL2CPP Player は引き続き未検証です。
+2026年10月10日時点では、今回整理後 DLL の物理振動を再試験していません。Bluetooth / Wireless Adapter のモーター、実 Unity ウィンドウのフォーカス喪失、振動中の切断・終了、複数実機、他機種、IL2CPP Player は引き続き未検証です。
 
 振動コードと標準入力の寿命処理は保持し、合成回帰で確認しました。GitHub Actions、機器設定変更、driver 導入は行っていません。
