@@ -19,6 +19,16 @@
 
 今回の合成入力は物理パドル由来を区別しません。割当先の通常 Gamepad state が公開 API に届くことを確認します。Unity Play の成功を参照コンパイルから推定しません。最初の sandbox 実行は一時フォルダーの書込権限で中断しました。通常環境での再実行は license 不足で終了しました。
 
+## 2026年10月11日の標準入力と振動の実機確認
+
+Xbox Elite Series 2 を USB-C で接続して確認しました。機種名はユーザーが確認しました。firmware version は取得できていません。
+
+GameInput probe は1台を列挙し、callback 診断 `0x00000000` を返しました。最初の試行は押下・解放 `0x0000000003FF0FFD`、次の試行は `0x0000000003FF3D68` を記録しました。View の解放 edge `0x2` も別の試行で記録しました。標準ボタンの合算は `0x0000000003FF3FFF` です。両スティックは各軸で `-1.0` から `1.0`、左右トリガーは `0.0` から `1.0` を記録しました。
+
+各モーターへ `0.25` を `700 ms` 要求しました。API の要求と停止は4モーターとも `0x00000000` でした。ユーザーは指定位置だけが振動し、要求後に停止したと確認しました。
+
+これは配布 DLL の GameInput probe と実機観察です。Unity Play の検証ではありません。firmware version、Bluetooth、Wireless Adapter、他機種、複数実機、IL2CPP Player、フォーカス喪失と切断時の停止は未検証です。
+
 ## 保持した以前の実機成果
 
 Elite Series 2 Core / firmware 5.23.6.0 の USB-C 接続で、本体低周波、本体高周波、左 impulse trigger、右 impulse trigger の応答と停止を確認しました。各0.25、700 msを要求し、ユーザーが所定位置の振動と停止を回答しました。
@@ -29,6 +39,6 @@ Elite Series 2 Core / firmware 5.23.6.0 の USB-C 接続で、本体低周波、
 
 ## 未検証範囲
 
-今回の整理後 DLL での物理振動の再試験は行っていません。Bluetooth / Wireless Adapter のモーター、実 Unity ウィンドウのフォーカス喪失、振動中の切断・終了、複数実機、他機種、IL2CPP Player は引き続き未検証です。
+2026年10月10日時点では、今回整理後 DLL の物理振動を再試験していません。Bluetooth / Wireless Adapter のモーター、実 Unity ウィンドウのフォーカス喪失、振動中の切断・終了、複数実機、他機種、IL2CPP Player は引き続き未検証です。
 
 振動コードと標準入力の寿命処理は保持し、合成回帰で確認しました。GitHub Actions、機器設定変更、driver 導入は行っていません。
