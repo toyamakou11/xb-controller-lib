@@ -26,21 +26,38 @@ try {
     $hr = [XbControllerProbe]::xb_poll($buffer,0,[ref]$count,[ref]$diagnostic)
     if ($hr -eq -2147024774) { $buffer=[XbControllerProbe+Snapshot[]]::new($count) }
     $watch=[Diagnostics.Stopwatch]::StartNew()
-    $first=$true
+    $deviceStats=@{}
     do {
         $hr=[XbControllerProbe]::xb_poll($buffer,$buffer.Length,[ref]$count,[ref]$diagnostic)
         if ($hr -eq -2147024774) { $buffer=[XbControllerProbe+Snapshot[]]::new($count); continue }
         if ($hr -lt 0) { throw ('読み取り失敗: 0x{0:X8}' -f $hr) }
-        if ($first) { '接続台数: '+$count; 'callback 診断: 0x{0:X8}' -f $diagnostic }
         for ($i=0;$i -lt $count;$i++) {
             $state=$buffer[$i]
-            if ($first -or $state.Pressed -or $state.Released) {
-                [pscustomobject]@{Token=$state.Token;Supported=('0x{0:X16}' -f $state.Supported);Buttons=('0x{0:X16}' -f $state.Buttons);Pressed=('0x{0:X16}' -f $state.Pressed);Released=('0x{0:X16}' -f $state.Released);Error=('0x{0:X8}' -f $state.Error)} | ConvertTo-Json -Compress
+            $key=[string]$state.Token
+            if (-not $deviceStats.ContainsKey($key)) {
+                $deviceStats[$key]=@{Supported=$state.Supported;Pressed=[uint64]0;Released=[uint64]0;Error=$state.Error;Minimum=@{};Maximum=@{}}
+            }
+            $stats=$deviceStats[$key]
+            $stats.Pressed=$stats.Pressed -bor [uint64]$state.Pressed
+            $stats.Released=$stats.Released -bor [uint64]$state.Released
+            $stats.Error=$state.Error
+            $axes=@{LeftTrigger=$state.LeftTrigger;RightTrigger=$state.RightTrigger;LeftX=$state.LeftX;LeftY=$state.LeftY;RightX=$state.RightX;RightY=$state.RightY}
+            foreach ($axis in $axes.Keys) {
+                $value=[double]$axes[$axis]
+                if (-not $stats.Minimum.ContainsKey($axis) -or $value -lt $stats.Minimum[$axis]) { $stats.Minimum[$axis]=$value }
+                if (-not $stats.Maximum.ContainsKey($axis) -or $value -gt $stats.Maximum[$axis]) { $stats.Maximum[$axis]=$value }
             }
         }
-        $first=$false
         if ($Seconds -gt 0) { Start-Sleep -Milliseconds 10 }
     } while ($watch.Elapsed.TotalSeconds -lt $Seconds)
+    foreach ($key in $deviceStats.Keys) {
+        $stats=$deviceStats[$key]
+        $ranges=[ordered]@{}
+        foreach ($axis in $stats.Minimum.Keys) { $ranges[$axis]=@([Math]::Round($stats.Minimum[$axis],3),[Math]::Round($stats.Maximum[$axis],3)) }
+        [pscustomobject]@{Token=[uint64]$key;Supported=('0x{0:X16}' -f $stats.Supported);Pressed=('0x{0:X16}' -f $stats.Pressed);Released=('0x{0:X16}' -f $stats.Released);AxisRanges=$ranges;Error=('0x{0:X8}' -f $stats.Error)} | ConvertTo-Json -Compress -Depth 4
+    }
+    '接続台数: '+$count
+    'callback 診断: 0x{0:X8}' -f $diagnostic
 } finally {
     $shutdown=[XbControllerProbe]::xb_shutdown()
     if ($shutdown -lt 0) { Write-Warning ('終了失敗: 0x{0:X8}' -f $shutdown) }
