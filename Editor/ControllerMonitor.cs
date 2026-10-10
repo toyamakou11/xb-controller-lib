@@ -13,6 +13,10 @@ namespace XbController.Editor
         public static void Open() => GetWindow<ControllerMonitor>("Xbox 入力診断");
 
         private void OnInspectorUpdate() => Repaint();
+        /// <summary>
+        /// Draws controller input and backend diagnostics, initializing the facade
+        /// if needed, and restarts it when the reconnect button is selected.
+        /// </summary>
         private void OnGUI()
         {
             var controllers = XboxControllers.All;

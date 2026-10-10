@@ -45,6 +45,14 @@ std::uint64_t SystemMask(GameInputSystemButtons buttons) noexcept {
     return result;
 }
 
+/**
+ * Registers newly connected gamepads with standard button and rumble capabilities;
+ * removes disconnected devices after stopping rumble owned by this bridge.
+ * Ignores duplicate connections, devices without gamepad information, and changes
+ * during shutdown. Device-info failures are saved in the context's callback
+ * diagnostic; caught exceptions are converted to E_OUTOFMEMORY there.
+ * @param data Context supplied when registering the callback.
+ */
 void CALLBACK DeviceChanged(GameInputCallbackToken, void* data, IGameInputDevice* device,
     std::uint64_t, GameInputDeviceStatus current, GameInputDeviceStatus) noexcept {
     auto& c = *static_cast<Context*>(data);
@@ -93,6 +101,14 @@ void CALLBACK SystemChanged(GameInputCallbackToken, void* data, IGameInputDevice
     }
 }
 
+/**
+ * Updates the snapshot from a gamepad reading, filtering buttons to supported
+ * standard inputs and copying analog values and the timestamp in microseconds.
+ * @param edges Whether to accumulate pressed/released transitions against the
+ * previous buttons; false leaves the existing transition masks unchanged.
+ * @return True after updating the snapshot and clearing its read error, or false
+ * without changing it when the reading has no gamepad state.
+ */
 bool Apply(Device& entry, IGameInputReading* reading, bool edges) noexcept {
     GameInputGamepadState value{};
     if (!reading->GetGamepadState(&value)) return false;
@@ -164,6 +180,17 @@ void Poll(Context& c, Device& entry, std::uint64_t cutoff) noexcept {
 }
 }
 
+/**
+ * Initializes GameInput and device/system-button callbacks on the Unity main
+ * thread, shutting down any existing context first. Enables background input;
+ * the managed facade controls whether input is exposed while unfocused.
+ * @param version Required ABI version, xb_abi_version.
+ * @param size Required snapshot size in bytes, sizeof(XbSnapshot).
+ * @return S_OK on success, E_INVALIDARG for an ABI mismatch (leaving the existing
+ * context untouched), or the failure HRESULT from shutdown, GameInput creation,
+ * or callback registration. Caught exceptions become E_OUTOFMEMORY. Callback
+ * diagnostics are reported separately by xb_poll.
+ */
 std::int32_t __cdecl xb_initialize(std::uint32_t version, std::uint32_t size) noexcept {
     if (version != xb_abi_version || size != sizeof(XbSnapshot)) return E_INVALIDARG;
     auto old = xb_shutdown();
@@ -185,6 +212,12 @@ std::int32_t __cdecl xb_initialize(std::uint32_t version, std::uint32_t size) no
     } catch (...) { xb_shutdown(); return E_OUTOFMEMORY; }
 }
 
+/**
+ * Stops owned rumble, unregisters callbacks, and releases the context on the
+ * Unity main thread. Returns S_OK if shutdown succeeds or no context exists.
+ * Returns E_FAIL if callback unregistration fails, retaining a stopping context
+ * for a later shutdown retry; polling and rumble requests then fail.
+ */
 std::int32_t __cdecl xb_shutdown() noexcept {
     if (!context) return S_OK;
     auto& c = *context;
@@ -202,6 +235,21 @@ std::int32_t __cdecl xb_shutdown() noexcept {
     return S_OK;
 }
 
+/**
+ * Copies device snapshots and consumes pending input transitions on the Unity
+ * main thread. Press and release transitions can both occur in one snapshot.
+ * @param buffer Output array; may be null only when capacity is zero.
+ * @param capacity Number of snapshots the array can hold, not its byte size.
+ * @param count Required output for the device count, including on capacity failure.
+ * @param diagnostic Required output for the retained callback error, or S_OK.
+ * @return E_INVALIDARG for invalid pointers, E_UNEXPECTED without an active
+ * context, HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) if capacity is too small
+ * (without writing snapshots or consuming input), or S_OK after copying snapshots.
+ * S_OK can accompany callback or per-device errors. Read failures produce neutral
+ * snapshots with the failure HRESULT and stop owned rumble. Successfully recovering
+ * expired history uses the latest state without gamepad transitions and reports
+ * GAMEINPUT_E_REFERENCE_READING_TOO_OLD in the snapshot's error field.
+ */
 std::int32_t __cdecl xb_poll(XbSnapshot* buffer, std::uint32_t capacity, std::uint32_t* count, std::int32_t* diagnostic) noexcept {
     if (!count || !diagnostic || (capacity && !buffer)) return E_INVALIDARG;
     *count = 0;
@@ -245,6 +293,12 @@ std::int32_t __cdecl xb_rumble(std::uint64_t token, float low, float high, float
     return GAMEINPUT_E_DEVICE_NOT_FOUND;
 }
 
+/**
+ * Clears cached input, read errors, and pending transitions on the Unity main
+ * thread. The next valid gamepad reading establishes a fresh baseline without
+ * gamepad transitions. Preserves device identity, capabilities, held system
+ * buttons, and owned rumble. Does nothing if no context exists.
+ */
 void __cdecl xb_resync() noexcept {
     if (!context) return;
     std::lock_guard<std::mutex> lock(context->mutex);

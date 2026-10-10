@@ -4,6 +4,10 @@ using XbController;
 // 空の GameObject に追加する。
 public sealed class InputMonitor : MonoBehaviour
 {
+    /// <summary>
+    /// Reports A-button press events with their connection IDs in the Unity console,
+    /// initializing the controller facade on first access if needed.
+    /// </summary>
     private void Update()
     {
         var pads = XboxControllers.All;
