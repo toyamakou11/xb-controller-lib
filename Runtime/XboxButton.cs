@@ -19,10 +19,7 @@ namespace XbController
         LeftStickLeft = 0x00100000, LeftStickRight = 0x00200000,
         RightStickUp = 0x00400000, RightStickDown = 0x00800000,
         RightStickLeft = 0x01000000, RightStickRight = 0x02000000,
-        PaddleLeft1 = 0x04000000, PaddleLeft2 = 0x08000000,
-        PaddleRight1 = 0x10000000, PaddleRight2 = 0x20000000,
-        Guide = 1UL << 32, Share = 1UL << 33,
-        Paddles = PaddleLeft1 | PaddleLeft2 | PaddleRight1 | PaddleRight2
+        Guide = 1UL << 32, Share = 1UL << 33
     }
 
     public enum ControllerBackend { UnityInputSystem, WindowsGameInput }

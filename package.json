@@ -1,11 +1,11 @@
 {
   "name": "com.toyamakou11.xb-controller",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Xbox Controller Library",
-  "description": "Xbox 標準入力と Windows GameInput の独立パドルを自動検出するライブラリ。",
+  "description": "Unity Input System と GameInput を使い、標準入力と振動を共通 API で扱うライブラリ。",
   "unity": "6000.3",
   "dependencies": { "com.unity.inputsystem": "1.19.0" },
   "author": { "name": "toyamakou11" },
   "license": "GPL-3.0-only",
-  "samples": [{ "displayName": "入力確認", "description": "標準入力と4パドルの状態を表示する例。", "path": "Samples~/InputMonitor" }]
+  "samples": [{ "displayName": "入力確認", "description": "標準ボタンを読み取る最小例。", "path": "Samples~/InputMonitor" }]
 }

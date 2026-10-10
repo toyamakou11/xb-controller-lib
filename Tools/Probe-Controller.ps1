@@ -35,7 +35,7 @@ try {
         for ($i=0;$i -lt $count;$i++) {
             $state=$buffer[$i]
             if ($first -or $state.Pressed -or $state.Released) {
-                [pscustomobject]@{Token=$state.Token;Supported=('0x{0:X16}' -f $state.Supported);FourPaddles=(($state.Supported -band 0x3C000000) -eq 0x3C000000);Buttons=('0x{0:X16}' -f $state.Buttons);Pressed=('0x{0:X16}' -f $state.Pressed);Released=('0x{0:X16}' -f $state.Released);Error=('0x{0:X8}' -f $state.Error)} | ConvertTo-Json -Compress
+                [pscustomobject]@{Token=$state.Token;Supported=('0x{0:X16}' -f $state.Supported);Buttons=('0x{0:X16}' -f $state.Buttons);Pressed=('0x{0:X16}' -f $state.Pressed);Released=('0x{0:X16}' -f $state.Released);Error=('0x{0:X8}' -f $state.Error)} | ConvertTo-Json -Compress
             }
         }
         $first=$false

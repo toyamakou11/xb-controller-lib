@@ -19,8 +19,6 @@ namespace XbController.Editor
             EditorGUILayout.LabelField("バックエンド", XboxControllers.Backend.ToString());
             EditorGUILayout.LabelField("初期化/更新エラー", $"0x{XboxControllers.BackendError:X8}");
             EditorGUILayout.LabelField("終了エラー", $"0x{XboxControllers.ShutdownError:X8}");
-            if (XboxControllers.Backend != ControllerBackend.WindowsGameInput)
-                EditorGUILayout.HelpBox("標準入力のフォールバックです。独立4パドルには Windows x64 DLL と GameInput 3.3 以降のランタイムが必要です。", MessageType.Warning);
             if (GUILayout.Button("接続を再検出")) { XboxControllers.Shutdown(); XboxControllers.Initialize(); }
             EditorGUILayout.HelpBox("Profile/Pair はゲーム入力として公開しません。Guide/Share は OS の入力方針にも依存します。", MessageType.Info);
             scroll = EditorGUILayout.BeginScrollView(scroll);
@@ -30,13 +28,12 @@ namespace XbController.Editor
                 var pad = controllers[i];
                 EditorGUILayout.Space();
                 EditorGUILayout.LabelField($"接続 {pad.ConnectionId}", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("4パドルの対応情報", pad.Supports(XboxButton.Paddles) ? "公開されています（実入力の保証ではありません）" : "公開されていません");
                 EditorGUILayout.LabelField("読み取りエラー", $"0x{pad.LastReadError:X8}");
                 EditorGUILayout.LabelField("左 / 右スティック", $"{pad.LeftStick} / {pad.RightStick}");
                 EditorGUILayout.LabelField("左 / 右トリガー", $"{pad.LeftTrigger:F3} / {pad.RightTrigger:F3}");
                 foreach (var button in buttons)
                 {
-                    if (button == XboxButton.None || button == XboxButton.Paddles) continue;
+                    if (button == XboxButton.None) continue;
                     EditorGUILayout.LabelField(button.ToString(), !pad.Supports(button) ? "非対応" : pad.IsPressed(button) ? "押下" : "解放");
                 }
             }
