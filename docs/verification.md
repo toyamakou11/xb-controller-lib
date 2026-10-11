@@ -44,6 +44,20 @@ GameInput は1台を列挙し、読み取りエラーと callback 診断は `0x0
 
 この試験は Bluetooth 接続でのネイティブ API 要求と物理応答です。Unity Play の結果ではありません。Xbox Wireless Adapter、他機種、firmware、複数実機、IL2CPP Player、フォーカス喪失と切断時の停止は未検証です。
 
+## 2026年10月11日の標準入力サンプル確認
+
+Issue #10 の「標準入力のゲーム操作」を追加しました。公開 API で移動、視点、A/B/X/Y、LB/RB、LT/RT を扱います。既定の Dynamic 更新を前提にします。依存は Input System 1.19.0 のままです。
+
+| 検査 | 結果と範囲 |
+| --- | --- |
+| サンプル実コードの合成実行 | 16 assertions 成功。方向と移動量、肩ボタン、LT、視点の制限、押下ログ、切断後の停止 |
+| パッケージ情報 | サンプル登録、操作手順、既存依存を確認。Package Manager の Import 操作は未実施 |
+| インストール済み Unity 6000.3.20f1 の参照コンパイル | Runtime、Editor、検証、driver、既存と新規サンプルの6 assemblyを C#9・警告をエラー扱いでコンパイル |
+| C++17 Release ビルドと native 合成回帰 | CTest 1/1 成功。既存の native 入力と振動の回帰 |
+| C# facade 合成回帰 | 10 assertions 成功。既存の poll と参照寿命の回帰 |
+
+サンプルの実機操作、描画、Unity Play は未検証です。参照コンパイルと合成入力は、その代わりの実機証拠にしません。今回のサンプルは振動を要求しません。以前の USB-C と Bluetooth の実機成果は別の記録です。
+
 ## 保持した以前の実機成果
 
 Elite Series 2 Core / firmware 5.23.6.0 の USB-C 接続で、本体低周波、本体高周波、左 impulse trigger、右 impulse trigger の応答と停止を確認しました。各0.25、700 msを要求し、ユーザーが所定位置の振動と停止を回答しました。
