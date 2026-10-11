@@ -183,6 +183,24 @@ Issue #7 を、1台の USB-C と実 Unity 6000.3.20f1 IL2CPP Player の窓で確
 
 修正DLLのSHA-256は `1DEA8C244EA1A070A36BFAEB136B2C48822EDFCDB21C822024517AA4A18F97CE` です。ABI v1・80 bytesは不変です。GameInput runtime、ライセンス、ドライバーは変更していません。
 
+## 2026年10月11日の UPM 圧縮配布確認
+
+Issue #35 の配布を、コミット済みファイルから `Tools/Pack-Package.ps1` で生成しました。製品コードと配布DLLは変更していません。
+
+| 検査 | 結果と範囲 |
+| --- | --- |
+| 圧縮の内容 | 全104ファイルがコミットのblobと一致。版0.2.0、サンプル7個、DLL、nativeソース、ビルド手順、ライセンスと第三者表示を確認 |
+| 再生成と不正な指定 | 同じコミットの再生成でSHA-256一致。存在しないRevisionは拒否し、配布ファイルを保持 |
+| Unity 6000.3.20f1 の実導入 | 専用の一時プロジェクトで `LocalTarball` として版0.2.0を解決。サンプル7個をPackage Manager APIでImportし、コンパイル成功 |
+| 圧縮パッケージの Unity Play | 103 assertions成功。入力は合成Gamepad、振動は記録用Gamepad。サンプルの画面操作と実機試験ではない |
+| 既存の native・IL2CPP・実機結果 | 製品コードとDLLが不変のため、直前の結果を再利用。今回の再実行とは区別 |
+
+圧縮には `.verification`、Git管理情報、AI方針を入れません。検査ツールの7個の不足metaを補いました。圧縮は未署名で、Unityも未署名表示を記録しました。
+
+最初の導入検査は、検査側の `PackageInfo` の名前衝突で失敗しました。完全名へ修正後に成功しました。成功したPlay実行でも、Unity Editorの検索索引に `ArgumentOutOfRangeException` が1件ありました。スタックは `UnityEditor.Search.SearchDatabase` で、ライブラリの呼出しはありません。Play検査は終了コード0と103 assertionsを記録しました。
+
+公開タグと配布ファイルの再取得結果は [Issue #35](https://github.com/toyamakou11/xb-controller-lib/issues/35) に記録します。既存の実機証拠と未検証範囲は保持します。
+
 ## 保持した以前の実機成果
 
 Elite Series 2 Core / firmware 5.23.6.0 の USB-C 接続で、本体低周波、本体高周波、左 impulse trigger、右 impulse trigger の応答と停止を確認しました。各0.25、700 msを要求し、ユーザーが所定位置の振動と停止を回答しました。
