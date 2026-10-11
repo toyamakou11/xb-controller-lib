@@ -11,8 +11,10 @@ Xbox Wireless Adapter は対応・検証対象外です。
 Unity 6000.3 以降の Package Manager で「Install package from git URL」を選びます。
 
 ```text
-https://github.com/toyamakou11/xb-controller-lib.git#main
+https://github.com/toyamakou11/xb-controller-lib.git#v0.2.0
 ```
+
+[Release v0.2.0](https://github.com/toyamakou11/xb-controller-lib/releases/tag/v0.2.0) の `com.toyamakou11.xb-controller-0.2.0.tgz` も利用できます。Package Manager の「Install package from tarball」で選びます。`SHA256SUMS.txt` は配布ファイルの確認用です。
 
 Input System 1.19.0 は依存として導入されます。旧 Input Manager のみの Editor は Active Input Handling を Both に設定し、再起動を案内します。既存の New/Both 設定と Actions は保持します。
 
@@ -92,3 +94,9 @@ pwsh -NoProfile -File Tools/Test-Rumble.ps1
 標準 Gamepad として認識される端末を扱います。全機種・全接続の実機保証ではありません。USB-C の4モーター応答と停止は以前の実機試験で確認しました。現在の検証範囲は [検証記録](docs/verification.md)、契約は [設計](docs/design.md) を参照してください。
 
 GitHub Actions は使用しません。ライセンスは [GPL-3.0-only](LICENSE)、Microsoft ローダーの表示は [第三者表記](THIRD_PARTY_NOTICES.md) にあります。
+
+タグの配布ファイルは、次のコマンドで `.verification/releases/` に生成できます。コミット済みのファイルだけを使用します。
+
+```powershell
+pwsh -NoProfile -File Tools/Pack-Package.ps1 -Revision v0.2.0
+```
