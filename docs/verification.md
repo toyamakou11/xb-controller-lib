@@ -172,7 +172,7 @@ Issue #7 を、1台の USB-C と実 Unity 6000.3.20f1 IL2CPP Player の窓で確
 
 | 検査 | 結果と範囲 |
 | --- | --- |
-| 実窓のフォーカス喪失 | ユーザーが即時停止と復帰後の再開なしを確認。ログは実focusとlibraryFocusのfalse→trueを記録。修正前DLLで観察。C#の明示0要求経路は不変 |
+| 実窓のフォーカス喪失 | 最終DLLでユーザーが即時停止と復帰後の再開なしを確認。初回DLLのログは実focusとlibraryFocusのfalse→trueを記録。最終確認はユーザーの観察回答 |
 | 振動中のUSB-C切断と再接続 | 修正DLLでユーザーが停止、窓の継続、再開なしを確認。古い参照は中立、新しい接続tokenは2 |
 | A保持の再接続 | 修正DLLで `held=True`、`pressed=False`、`released=False` を記録 |
 | 振動中の終了 | 修正DLLで3秒後に窓を正常終了。ユーザーが停止を確認。`ShutdownError=0x00000000`、古い参照は無効 |
