@@ -159,6 +159,7 @@ Personal 状態で Unity 6000.3.20f1 の Play 検査が103 assertions成功し�
 | 配布 DLL の正常経路 | 20 assertions成功。ABI v1・80 bytes、DLL読込、初期化、poll、終了。列挙0台 |
 | runtime 生成失敗の注入 | 18 assertions成功。実 bridge と失敗する SDK factory の組合せ。Unity経路と診断 `0x8007007E` |
 | Player DLL の欠落 | 18 assertions成功。別プロセスでUnity経路と同じ診断を確認 |
+| 結果引数の欠落 | 2ケースを終了コード1で拒否。実行ファイルは不変。ビルド前に古い実行ファイルを削除 |
 | Player 内の入力と振動 | 各経路で合成 Gamepad の4通常ボタン、両stick、両trigger、振動、停止、終了後の中立を確認 |
 
 再実行手順は [Player 検証](../Tests~/Player/README.md) を参照してください。Player の DLL コピーは復元しました。製品の bridge ソースと配布 DLL は不変です。物理入力・振動、実ウィンドウのフォーカス操作、runtime を削除したOSは未検証です。過去のUSB-C・Bluetooth成果は別に保持します。

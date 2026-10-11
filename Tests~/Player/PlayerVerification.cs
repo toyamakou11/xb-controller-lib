@@ -27,7 +27,12 @@ namespace XbController.Verification
             int exit = 1;
             try
             {
-                bool fallback = Environment.GetCommandLineArgs().Contains("-expect-fallback");
+                string[] args = Environment.GetCommandLineArgs();
+                int resultIndex = Array.IndexOf(args, "-result");
+                if (resultIndex < 0 || resultIndex + 1 >= args.Length || args[resultIndex + 1].StartsWith("-"))
+                    throw new ArgumentException("-result と結果ファイルのパスが必要です。");
+                string result = args[resultIndex + 1];
+                bool fallback = args.Contains("-expect-fallback");
                 XboxControllers.Shutdown();
                 Check(IntPtr.Size == 8 && Marshal.SizeOf<NativeSnapshot>() == 80, "x64 ABI");
                 if (!fallback)
@@ -68,8 +73,6 @@ namespace XbController.Verification
                 Check(!pad.IsConnected && pad.LeftStick == Vector2.zero && device.Low == 0 && device.High == 0, "終了後の中立と所有rumble停止");
                 InputSystem.RemoveDevice(device);
                 XboxControllers.Shutdown();
-                string[] args = Environment.GetCommandLineArgs();
-                string result = args[Array.IndexOf(args, "-result") + 1];
                 File.WriteAllText(result, $"PASS assertions={assertions} fallback={fallback}\n");
                 Debug.Log($"Player検証成功 assertions={assertions} fallback={fallback}");
                 exit = 0;

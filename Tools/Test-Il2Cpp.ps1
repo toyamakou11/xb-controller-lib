@@ -28,6 +28,7 @@ if (-not (Test-Path -LiteralPath "$project/ProjectSettings/ProjectVersion.txt"))
 }
 $exe = Join-Path $scratch 'build/Verification.exe'
 $buildLog = Join-Path $scratch 'build.log'
+if (Test-Path -LiteralPath $exe) { Remove-Item -LiteralPath $exe }
 $process = Start-Process -FilePath $UnityEditor -WindowStyle Hidden -ArgumentList @('-batchmode','-nographics','-quit','-projectPath',('"'+$project+'"'),'-executeMethod','BuildVerification.Build','-player-output',('"'+$exe+'"'),'-logFile',('"'+$buildLog+'"')) -PassThru
 $process.WaitForExit()
 if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $exe)) { throw 'IL2CPP ビルド失敗。build.log を確認してください。' }
@@ -45,6 +46,17 @@ function Invoke-PlayerCheck([string]$name, [bool]$fallback) {
     "$name $text"
 }
 Invoke-PlayerCheck 'normal' $false
+$exeHash = (Get-FileHash -LiteralPath $exe).Hash
+foreach ($terminal in @($false, $true)) {
+    $log = Join-Path $scratch "player-invalid-result-$terminal.log"
+    $arguments = @('-batchmode','-nographics','-logFile',('"'+$log+'"'))
+    if ($terminal) { $arguments += '-result' }
+    $player = Start-Process -FilePath $exe -WindowStyle Hidden -ArgumentList $arguments -PassThru
+    $player.WaitForExit()
+    if ($player.ExitCode -ne 1 -or (Get-Content -LiteralPath $log -Raw) -notmatch 'ArgumentException: -result' -or
+        (Get-FileHash -LiteralPath $exe).Hash -ne $exeHash) { throw '不正な結果引数の拒否に失敗しました。' }
+}
+'PASS 結果引数の欠落2ケースと実行ファイルの不変性'
 $faultBuild = Join-Path $scratch 'runtime-fault-build'
 & $CMake -S $fixtures -B $faultBuild -A x64 "-DREPO_ROOT=$repository" "-DGAMEINPUT_SDK=$SdkPath" *> "$scratch/fault-configure.log"
 if ($LASTEXITCODE -ne 0) { throw '生成失敗 fixture の CMake 構成失敗。' }
