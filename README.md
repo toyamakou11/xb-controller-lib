@@ -43,6 +43,8 @@ public sealed class PlayerInputExample : MonoBehaviour
 
 サンプル「標準入力のゲーム操作」は移動、視点、ボタン、LB/RB、LT/RT を示します。[導入と操作](Samples~/StandardInput/README.md) を参照してください。
 
+サンプル「モーター別の振動」は個別、同時、時間指定の要求と停止を示します。[導入と操作](Samples~/Rumble/README.md) を参照してください。
+
 ## API
 
 | API | 内容 |
