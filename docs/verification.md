@@ -147,6 +147,23 @@ Issue #15 の「プレイヤーの参加」を追加しました。前提の #6 
 
 Unity、Input System、GameInput、デッドゾーンは代役です。Unity Play、Import、画面表示、複数実機操作は未検証です。今回の Unity 実行は有効なライセンスがなく、Play 開始前に exit 198 でした。最初の参加サンプルの合成コンパイルは using 不足で失敗し、修正後に成功しました。
 
+## 2026年10月11日の Unity Play と IL2CPP Player 確認
+
+Personal 状態で Unity 6000.3.20f1 の Play 検査が103 assertions成功しました。以前の exit 198 は解消しました。入力は合成 Gamepad、振動は RecordingGamepad、フォーカスは反射による呼出しです。物理操作とは区別します。
+
+承認された Windows IL2CPP モジュールだけを追加しました。初回の Player ビルドは、パッケージの C++ ソースを Unity が再コンパイルして失敗しました。`Native/bridge.cpp` と `Native/tests.cpp` の Player 対象を無効化し、配布 DLL を使用します。
+
+| 検査 | 結果と範囲 |
+| --- | --- |
+| Windows x64 IL2CPP Player | ビルド成功。実 GameAssembly.dll と Player を生成 |
+| 配布 DLL の正常経路 | 20 assertions成功。ABI v1・80 bytes、DLL読込、初期化、poll、終了。列挙0台 |
+| runtime 生成失敗の注入 | 18 assertions成功。実 bridge と失敗する SDK factory の組合せ。Unity経路と診断 `0x8007007E` |
+| Player DLL の欠落 | 18 assertions成功。別プロセスでUnity経路と同じ診断を確認 |
+| 結果引数の欠落 | 2ケースを終了コード1で拒否。実行ファイルは不変。ビルド前に古い実行ファイルを削除 |
+| Player 内の入力と振動 | 各経路で合成 Gamepad の4通常ボタン、両stick、両trigger、振動、停止、終了後の中立を確認 |
+
+再実行手順は [Player 検証](../Tests~/Player/README.md) を参照してください。Player の DLL コピーは復元しました。製品の bridge ソースと配布 DLL は不変です。物理入力・振動、実ウィンドウのフォーカス操作、runtime を削除したOSは未検証です。過去のUSB-C・Bluetooth成果は別に保持します。
+
 ## 保持した以前の実機成果
 
 Elite Series 2 Core / firmware 5.23.6.0 の USB-C 接続で、本体低周波、本体高周波、左 impulse trigger、右 impulse trigger の応答と停止を確認しました。各0.25、700 msを要求し、ユーザーが所定位置の振動と停止を回答しました。

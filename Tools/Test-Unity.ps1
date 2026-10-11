@@ -17,7 +17,12 @@ foreach ($name in @('Verification.cs','VerificationDriver.cs','XbController.Veri
         if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old }
     }
 }
-Copy-Item "$repository/Tests~/*" "$project/Assets/Verification" -Recurse -Force
+foreach ($name in @('Verification.cs', 'XbController.Verification.asmdef', 'Driver')) {
+    Copy-Item -LiteralPath "$repository/Tests~/$name" -Destination "$project/Assets/Verification" -Recurse -Force
+    if (Test-Path -LiteralPath "$repository/Tests~/$name.meta") {
+        Copy-Item -LiteralPath "$repository/Tests~/$name.meta" -Destination "$project/Assets/Verification" -Force
+    }
+}
 $manifest = @{dependencies=@{
     'com.toyamakou11.xb-controller'='file:'+($repository -replace '\\','/')
     'com.unity.inputsystem'='file:'+("$inputPackage/package" -replace '\\','/')

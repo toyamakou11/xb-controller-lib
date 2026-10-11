@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.20)
+project(PlayerRuntimeFault LANGUAGES CXX)
+add_library(XbControllerNative SHARED "${REPO_ROOT}/Native/bridge.cpp" fault-runtime.cpp)
+target_compile_features(XbControllerNative PRIVATE cxx_std_17)
+target_include_directories(XbControllerNative PRIVATE "${GAMEINPUT_SDK}/native/include")
+target_compile_definitions(XbControllerNative PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_options(XbControllerNative PRIVATE /W4 /WX /utf-8)
+set_property(TARGET XbControllerNative PROPERTY MSVC_RUNTIME_LIBRARY MultiThreaded)
