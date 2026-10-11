@@ -45,6 +45,8 @@ public sealed class PlayerInputExample : MonoBehaviour
 
 サンプル「モーター別の振動」は個別、同時、時間指定の要求と停止を示します。[導入と操作](Samples~/Rumble/README.md) を参照してください。
 
+サンプル「地面の振動」はゲーム側の接地と移動速度を振動へ接続します。[導入と停止規則](Samples~/GroundRumble/README.md) を参照してください。
+
 ## API
 
 | API | 内容 |
