@@ -164,6 +164,25 @@ Personal 状態で Unity 6000.3.20f1 の Play 検査が103 assertions成功し�
 
 再実行手順は [Player 検証](../Tests~/Player/README.md) を参照してください。Player の DLL コピーは復元しました。製品の bridge ソースと配布 DLL は不変です。物理入力・振動、実ウィンドウのフォーカス操作、runtime を削除したOSは未検証です。過去のUSB-C・Bluetooth成果は別に保持します。
 
+## 2026年10月11日の USB-C ライフサイクル確認
+
+Issue #7 を、1台の USB-C と実 Unity 6000.3.20f1 IL2CPP Player の窓で確認しました。モデルと firmware は今回確認していません。試験窓の導入は [実機確認手順](../Tests~/Physical/README.md) を参照してください。
+
+最初の振動中の切断で Player が crash しました。dump は `GameInputRedist.dll` 3.5.283.0 内の null 読取を示しました。呼出し元は `StopOwnedRumble` の `SetRumbleState(nullptr)` です。SDK は null を許容しますが、観察した runtime の問題を避けるため、全モーター0の構造体を渡します。回帰検査は修正前に失敗し、修正後に成功しました。
+
+| 検査 | 結果と範囲 |
+| --- | --- |
+| 実窓のフォーカス喪失 | ユーザーが即時停止と復帰後の再開なしを確認。ログは実focusとlibraryFocusのfalse→trueを記録。修正前DLLで観察。C#の明示0要求経路は不変 |
+| 振動中のUSB-C切断と再接続 | 修正DLLでユーザーが停止、窓の継続、再開なしを確認。古い参照は中立、新しい接続tokenは2 |
+| A保持の再接続 | 修正DLLで `held=True`、`pressed=False`、`released=False` を記録 |
+| 振動中の終了 | 修正DLLで3秒後に窓を正常終了。ユーザーが停止を確認。`ShutdownError=0x00000000`、古い参照は無効 |
+| C++17 native と facade | /W4・/WX ビルド、CTest 1/1、facade 10 assertions成功 |
+| Unity Play | 修正DLLで103 assertions成功。合成入力・記録用モーター・手動focus呼出し |
+
+初回の実窓ログは11:51 UTC、修正後は11:57～11:58 UTCです。初回の切断crashは成功扱いにしません。観察結果と要求受理を区別します。Bluetoothのライフサイクル、複数実機、他機種は未検証です。過去のUSB-C・Bluetooth成果は保持します。
+
+修正DLLのSHA-256は `1DEA8C244EA1A070A36BFAEB136B2C48822EDFCDB21C822024517AA4A18F97CE` です。ABI v1・80 bytesは不変です。GameInput runtime、ライセンス、ドライバーは変更していません。
+
 ## 保持した以前の実機成果
 
 Elite Series 2 Core / firmware 5.23.6.0 の USB-C 接続で、本体低周波、本体高周波、左 impulse trigger、右 impulse trigger の応答と停止を確認しました。各0.25、700 msを要求し、ユーザーが所定位置の振動と停止を回答しました。
