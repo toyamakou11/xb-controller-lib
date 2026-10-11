@@ -16,6 +16,8 @@ https://github.com/toyamakou11/xb-controller-lib.git#v0.2.0
 
 [Release v0.2.0](https://github.com/toyamakou11/xb-controller-lib/releases/tag/v0.2.0) の `com.toyamakou11.xb-controller-0.2.0.tgz` も利用できます。Package Manager の「Install package from tarball」で選びます。`SHA256SUMS.txt` は配布ファイルの確認用です。
 
+圧縮パッケージは未署名です。
+
 Input System 1.19.0 は依存として導入されます。旧 Input Manager のみの Editor は Active Input Handling を Both に設定し、再起動を案内します。既存の New/Both 設定と Actions は保持します。
 
 Windows x64 は GameInput を既定にして、対応する4モーター振動と入力履歴を利用します。SDK 3.5.283 でビルドした DLL を同梱しています。GameInput v3 runtime がない場合や他 OS では、Unity Gamepad で標準入力と本体2モーター振動を扱います。
