@@ -112,6 +112,28 @@ Issue #14 の「ゲームイベントの振動」を追加しました。発射�
 
 合成試験では Unity と Controller を代役に置き換えます。API 受付と物理応答を分けます。Unity Play、Import、画面表示、実ゲームのイベント接続、ネイティブ API 実機要求と物理応答は未検証です。以前の USB-C と Bluetooth の証拠は保持しました。
 
+## 2026年10月11日の2台シミュレーション
+
+Issue #6 の補助検証として、異なる2台の入力を合成しました。所有する実コントローラーは1台です。今回の結果は複数実機の成功を示しません。
+
+| 検査 | 結果と範囲 |
+| --- | --- |
+| 実 Controller と一覧管理の合成実行 | 31 assertions 成功。ボタン、edge、軸、対応情報、振動要求、切断、参照の中立化、再接続、終了 |
+| 実 native bridge の合成回帰 | CTest 1/1 成功。装置別の履歴で異なるボタンと軸を注入。振動要求と片側の切断を分離 |
+| 既存 facade 回帰 | 10 assertions 成功 |
+| Unity 6000.3.20f1 参照コンパイル | Runtime、Editor、検証、driver、UI以外の5サンプルの9 assemblyが成功。C#9、警告をエラー扱い |
+| 配布 DLL | SHA-256 は上記の値を保持。Runtime と bridge の製品コードは変更なし |
+
+`Tools/Test-MultipleControllers.ps1` は実 `Controller`、`XboxControllers`、ボタン定義、snapshot 定義をコンパイルします。Unity、Input System、GameInput、デッドゾーン処理は代役です。デッドゾーンの数値精度を検証する試験ではありません。native 試験は SDK 参照で実 bridge をコンパイルし、GameInput と装置を代役にします。両試験は別々に実行します。
+
+全サンプルの結合コンパイルは uGUI の参照不足で失敗しました。今回変更していない UI サンプルはコンパイル対象から外しました。最初の新規合成試験も using 不足で失敗しました。using を修正後、31 assertions が成功しました。
+
+最初の受信専用 probe は0台、callback 診断 `0x00000000` でした。これは実 DLL の呼び出し結果です。2台のシミュレーションとは分けます。今回の物理振動、複数実機、Bluetooth・USB-C の2台接続、Unity Play は未検証です。Issue #6 の複数実機条件は未達です。以前の USB-C と Bluetooth の実機成果は保持しました。
+
+```powershell
+pwsh -NoProfile -File Tools/Test-MultipleControllers.ps1
+```
+
 ## 保持した以前の実機成果
 
 Elite Series 2 Core / firmware 5.23.6.0 の USB-C 接続で、本体低周波、本体高周波、左 impulse trigger、右 impulse trigger の応答と停止を確認しました。各0.25、700 msを要求し、ユーザーが所定位置の振動と停止を回答しました。
