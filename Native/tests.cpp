@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <unordered_map>
 
 using Microsoft::WRL::RuntimeClass;
 using Microsoft::WRL::RuntimeClassFlags;
@@ -44,23 +45,31 @@ class Input final : public RuntimeClass<RuntimeClassFlags<ClassicCom>, IGameInpu
 public:
     ComPtr<IGameInputReading> latest;
     std::vector<ComPtr<IGameInputReading>> history;
+    std::unordered_map<IGameInputDevice*, std::vector<ComPtr<IGameInputReading>>> deviceHistory;
     std::uint64_t clock{100};
     HRESULT tail{GAMEINPUT_E_READING_NOT_FOUND};
     bool unregisterSucceeds{true}, unregisterUnlocked{true};
     unsigned unregisterCalls{}, currentCalls{};
     std::uint64_t STDMETHODCALLTYPE GetCurrentTimestamp() override { return clock; }
-    HRESULT STDMETHODCALLTYPE GetCurrentReading(GameInputKind, IGameInputDevice*, IGameInputReading** output) override {
+    HRESULT STDMETHODCALLTYPE GetCurrentReading(GameInputKind, IGameInputDevice* device, IGameInputReading** output) override {
         ++currentCalls;
+        const auto found = deviceHistory.find(device);
+        if (found != deviceHistory.end()) {
+            if (found->second.empty()) { *output = nullptr; return E_FAIL; }
+            return found->second.back().CopyTo(output);
+        }
         if (!latest) { *output = nullptr; return E_FAIL; }
         return latest.CopyTo(output);
     }
-    HRESULT STDMETHODCALLTYPE GetNextReading(IGameInputReading* reference, GameInputKind, IGameInputDevice*, IGameInputReading** output) override {
+    HRESULT STDMETHODCALLTYPE GetNextReading(IGameInputReading* reference, GameInputKind, IGameInputDevice* device, IGameInputReading** output) override {
         *output = nullptr;
+        const auto found = deviceHistory.find(device);
+        const auto& readings = found != deviceHistory.end() ? found->second : history;
         std::size_t index{};
-        for (std::size_t i = 0; i < history.size(); ++i)
-            if (history[i].Get() == reference) { index = i + 1; break; }
-        if (index == history.size()) return tail;
-        return history[index].CopyTo(output);
+        for (std::size_t i = 0; i < readings.size(); ++i)
+            if (readings[i].Get() == reference) { index = i + 1; break; }
+        if (index == readings.size()) return tail;
+        return readings[index].CopyTo(output);
     }
     HRESULT STDMETHODCALLTYPE GetPreviousReading(IGameInputReading*, GameInputKind, IGameInputDevice*, IGameInputReading**) override { return E_NOTIMPL; }
     HRESULT STDMETHODCALLTYPE RegisterReadingCallback(IGameInputDevice*, GameInputKind, void*, GameInputReadingCallback, GameInputCallbackToken*) override { return E_NOTIMPL; }
@@ -316,8 +325,8 @@ int main() {
     auto firstHardware = Make<Hardware>();
     auto secondHardware = Make<Hardware>();
     for (auto pairHardware : {firstHardware.Get(), secondHardware.Get()}) {
-        pairHardware->gamepad.supportedLayout = GameInputGamepadA;
-        pairHardware->info.supportedRumbleMotors = GameInputRumbleLowFrequency;
+        pairHardware->gamepad.supportedLayout = GameInputGamepadA | GameInputGamepadB;
+        pairHardware->info.supportedRumbleMotors = GameInputRumbleLowFrequency | GameInputRumbleHighFrequency;
         DeviceChanged(0, context.get(), pairHardware, 0, GameInputDeviceConnected, GameInputDeviceNoStatus);
     }
     Check(context->devices.size() == 2, "two native devices enumerate independently");
@@ -328,23 +337,55 @@ int main() {
     Check(xb_poll(pair, 1, &count, &diagnostic) == HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER)
         && count == 2 && !context->devices[0].reading && !context->devices[1].reading,
         "capacity negotiation does not consume either device history");
-    auto pairReading = Sample(10, GameInputGamepadA);
-    input->latest = pairReading;
+    auto firstReading = Sample(10, GameInputGamepadA);
+    firstReading->state.leftThumbstickX = 0.4f;
+    firstReading->state.rightTrigger = 0.2f;
+    auto secondReading = Sample(10, GameInputGamepadB);
+    secondReading->state.leftThumbstickX = -0.6f;
+    secondReading->state.rightTrigger = 0.7f;
+    input->deviceHistory[firstHardware.Get()] = {firstReading};
+    input->deviceHistory[secondHardware.Get()] = {secondReading};
     Check(xb_poll(pair, 2, &count, &diagnostic) == S_OK && count == 2
         && pair[0].token == firstToken && pair[1].token == secondToken
-        && pair[0].buttons == GameInputGamepadA && pair[1].buttons == GameInputGamepadA,
-        "resized native output preserves both device identities");
+        && pair[0].buttons == GameInputGamepadA && pair[1].buttons == GameInputGamepadB
+        && pair[0].leftX == 0.4f && pair[1].leftX == -0.6f
+        && pair[0].rightTrigger == 0.2f && pair[1].rightTrigger == 0.7f,
+        "2台の異なるボタンと軸を分離する");
+    auto firstNext = Sample(20, GameInputGamepadB);
+    auto secondNext = Sample(20, GameInputGamepadA);
+    input->deviceHistory[firstHardware.Get()].push_back(firstNext);
+    input->deviceHistory[secondHardware.Get()].push_back(secondNext);
+    Check(xb_poll(pair, 2, &count, &diagnostic) == S_OK && count == 2
+        && pair[0].pressed == GameInputGamepadB && pair[0].released == GameInputGamepadA
+        && pair[1].pressed == GameInputGamepadA && pair[1].released == GameInputGamepadB,
+        "装置別の履歴で押下と解放を分離する");
     Check(xb_rumble(firstToken, 0.25f, 0, 0, 0) == S_OK && firstHardware->rumbleCalls == 1
         && secondHardware->rumbleCalls == 0, "output ownership remains device-specific");
+    Check(xb_rumble(secondToken, 0.7f, 0.1f, 0, 0) == S_OK
+        && firstHardware->lastRumble.lowFrequency == 0.25f
+        && secondHardware->lastRumble.lowFrequency == 0.7f
+        && secondHardware->lastRumble.highFrequency == 0.1f, "装置別の振動強度を保持する");
     DeviceChanged(0, context.get(), firstHardware.Get(), 0, GameInputDeviceNoStatus, GameInputDeviceConnected);
     Check(context->devices.size() == 1 && context->devices[0].state.token == secondToken
         && firstHardware->stopCalls == 1 && secondHardware->stopCalls == 0,
         "disconnect neutralizes only owned first device output");
+    auto remainingReading = Sample(30, GameInputGamepadB);
+    remainingReading->state.leftThumbstickX = 0.9f;
+    input->deviceHistory[secondHardware.Get()].push_back(remainingReading);
+    Check(xb_poll(pair, 2, &count, &diagnostic) == S_OK && count == 1
+        && pair[0].token == secondToken && pair[0].buttons == GameInputGamepadB
+        && pair[0].leftX == 0.9f && secondHardware->lastRumble.lowFrequency == 0.7f,
+        "一方の切断後も他方の入力更新と振動を保持する");
     Check(xb_rumble(firstToken, 0.25f, 0, 0, 0) == GAMEINPUT_E_DEVICE_NOT_FOUND,
         "retired native token cannot control a remaining device");
     DeviceChanged(0, context.get(), firstHardware.Get(), 0, GameInputDeviceConnected, GameInputDeviceNoStatus);
     Check(context->devices.size() == 2 && context->devices[1].state.token != firstToken
         && context->devices[1].state.token != secondToken, "reconnection allocates a new native token");
+    input->deviceHistory[firstHardware.Get()] = {Sample(40, GameInputGamepadA)};
+    Check(xb_poll(pair, 2, &count, &diagnostic) == S_OK && count == 2
+        && pair[0].token == secondToken && pair[1].token != firstToken
+        && pair[0].buttons == GameInputGamepadB && pair[1].buttons == GameInputGamepadA,
+        "再接続した装置を新しいtokenで分離する");
     Check(xb_shutdown() == S_OK, "multiple native device shutdown");
     std::puts("Native regression tests passed (fake GameInput; no hardware).");
     return 0;

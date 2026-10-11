@@ -81,6 +81,7 @@ Guide/Share はバックエンドと OS が公開する範囲に限ります。P
 ```powershell
 pwsh -NoProfile -File Tools/Build-Native.ps1
 pwsh -NoProfile -File Tools/Test-NativePolling.ps1
+pwsh -NoProfile -File Tools/Test-MultipleControllers.ps1
 pwsh -NoProfile -File Tools/Test-Unity.ps1 -UnityEditor '<Unity Editor の絶対パス>'
 pwsh -NoProfile -File Tools/Probe-Controller.ps1
 pwsh -NoProfile -File Tools/Test-Rumble.ps1
