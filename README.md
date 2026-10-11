@@ -51,6 +51,8 @@ public sealed class PlayerInputExample : MonoBehaviour
 
 サンプル「ゲームイベントの振動」は発射、反動、被弾を振動へ接続します。[導入と重なりの規則](Samples~/EventRumble/README.md) を参照してください。
 
+サンプル「プレイヤーの参加」は通常ボタンで接続を割り当てます。[導入と再接続の規則](Samples~/PlayerJoin/README.md) を参照してください。
+
 ## API
 
 | API | 内容 |

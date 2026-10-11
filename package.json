@@ -13,6 +13,7 @@
     { "displayName": "UI メニュー操作", "description": "コントローラーで既存 UI の選択、決定、取消を行う例。", "path": "Samples~/UiMenu" },
     { "displayName": "モーター別の振動", "description": "個別、同時、時間指定の振動と停止の最小例。", "path": "Samples~/Rumble" },
     { "displayName": "地面の振動", "description": "接地、地面の種類と移動速度を振動へ接続する例。", "path": "Samples~/GroundRumble" },
-    { "displayName": "ゲームイベントの振動", "description": "発射、反動、被弾の振動と重なりの最小例。", "path": "Samples~/EventRumble" }
+    { "displayName": "ゲームイベントの振動", "description": "発射、反動、被弾の振動と重なりの最小例。", "path": "Samples~/EventRumble" },
+    { "displayName": "プレイヤーの参加", "description": "参加、入力の割当、切断と明示的な再参加の最小例。", "path": "Samples~/PlayerJoin" }
   ]
 }

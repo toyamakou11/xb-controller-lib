@@ -134,6 +134,19 @@ uGUI の参照不足は、インストール済みテンプレートの DLL で�
 pwsh -NoProfile -File Tools/Test-MultipleControllers.ps1
 ```
 
+## 2026年10月11日の参加サンプル確認
+
+Issue #15 の「プレイヤーの参加」を追加しました。前提の #6 は、承認された2台の合成検証で完了しました。A の押下で参加し、接続参照をプレイヤーの空きスロットへ割り当てます。再接続は新しい押下で再参加します。
+
+| 検査 | 結果と範囲 |
+| --- | --- |
+| 実サンプル・Controller・一覧管理の合成実行 | 参加25、基礎の2台31 assertions 成功。移動と操作の分離、満員、切断、明示的な再参加、列挙順序、割当解除 |
+| UI サンプル回帰 | 13 assertions 成功 |
+| Unity 6000.3.20f1 参照コンパイル | 個別11 assemblyと全7サンプルの結合1 assemblyが成功。インストール済み uGUI DLL も参照 |
+| native・facade の既存検査 | #6 の結果を再利用。対象コードと配布 DLL が不変と確認 |
+
+Unity、Input System、GameInput、デッドゾーンは代役です。Unity Play、Import、画面表示、複数実機操作は未検証です。今回の Unity 実行は有効なライセンスがなく、Play 開始前に exit 198 でした。最初の参加サンプルの合成コンパイルは using 不足で失敗し、修正後に成功しました。
+
 ## 保持した以前の実機成果
 
 Elite Series 2 Core / firmware 5.23.6.0 の USB-C 接続で、本体低周波、本体高周波、左 impulse trigger、右 impulse trigger の応答と停止を確認しました。各0.25、700 msを要求し、ユーザーが所定位置の振動と停止を回答しました。
