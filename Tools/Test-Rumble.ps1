@@ -41,7 +41,7 @@ try {
     $choice = Read-Host 'このセッションの Connection を選択（空欄で終了）'
     if (-not $choice) { return }
     if (-not [uint64]::TryParse($choice,[ref]$selected) -or -not ($devices.Token -contains $selected)) { throw '選択が無効です。' }
-    $transport = Read-Host '実際の接続方法（USB-C / Bluetooth / Wireless Adapter）'
+    $transport = Read-Host '実際の接続方法（USB-C / Bluetooth）'
     '要求の成功は実機振動の証明ではありません。選択端末を手に持ち、各案内の Enter 後に観測してください。'
     $names = @('LowFrequency 本体左','HighFrequency 本体右','LeftTrigger 左トリガー','RightTrigger 右トリガー')
     for ($motor=0; $motor -lt $names.Length; $motor++) {
