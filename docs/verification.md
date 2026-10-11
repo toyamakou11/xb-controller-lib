@@ -27,7 +27,22 @@ GameInput probe は1台を列挙し、callback 診断 `0x00000000` を返しま�
 
 各モーターへ `0.25` を `700 ms` 要求しました。API の要求と停止は4モーターとも `0x00000000` でした。ユーザーは指定位置だけが振動し、要求後に停止したと確認しました。
 
-これは配布 DLL の GameInput probe と実機観察です。Unity Play の検証ではありません。firmware version、Bluetooth、Wireless Adapter、他機種、複数実機、IL2CPP Player、フォーカス喪失と切断時の停止は未検証です。
+これは配布 DLL の GameInput probe と実機観察です。Unity Play の検証ではありません。USB-C試験時点では、firmware version、Bluetooth、Wireless Adapter、他機種、複数実機、IL2CPP Player、フォーカス喪失と切断時の停止は未検証でした。
+
+## 2026年10月11日のBluetooth振動実機確認
+
+GameInput は1台を列挙し、読み取りエラーと callback 診断は `0x00000000` でした。デバイス表示名は `Xbox Wireless Controller` です。モデルと firmware version は確認していません。
+
+配布 DLL の `xb_rumble` に各モーター `0.25`、`700 ms` を要求しました。対応マスクは `0xF` でした。各要求と停止の HRESULT は `0x00000000` でした。
+
+| 要求 | ユーザーが確認した位置 | 要求後 |
+| --- | --- | --- |
+| LowFrequency | 本体左のみ | 停止 |
+| HighFrequency | 本体右のみ | 停止 |
+| LeftTrigger | 左トリガーのみ | 停止 |
+| RightTrigger | 右トリガーのみ | 停止 |
+
+この試験は Bluetooth 接続でのネイティブ API 要求と物理応答です。Unity Play の結果ではありません。Xbox Wireless Adapter、他機種、firmware、複数実機、IL2CPP Player、フォーカス喪失と切断時の停止は未検証です。
 
 ## 保持した以前の実機成果
 
