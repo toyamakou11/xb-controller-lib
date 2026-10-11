@@ -47,6 +47,8 @@ public sealed class PlayerInputExample : MonoBehaviour
 
 サンプル「地面の振動」はゲーム側の接地と移動速度を振動へ接続します。[導入と停止規則](Samples~/GroundRumble/README.md) を参照してください。
 
+サンプル「ゲームイベントの振動」は発射、反動、被弾を振動へ接続します。[導入と重なりの規則](Samples~/EventRumble/README.md) を参照してください。
+
 ## API
 
 | API | 内容 |
