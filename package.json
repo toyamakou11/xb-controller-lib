@@ -10,6 +10,7 @@
   "samples": [
     { "displayName": "入力確認", "description": "標準ボタンを読み取る最小例。", "path": "Samples~/InputMonitor" },
     { "displayName": "標準入力のゲーム操作", "description": "移動、視点、ボタン、肩ボタンとトリガーの最小例。", "path": "Samples~/StandardInput" },
+    { "displayName": "UI メニュー操作", "description": "コントローラーで既存 UI の選択、決定、取消を行う例。", "path": "Samples~/UiMenu" },
     { "displayName": "モーター別の振動", "description": "個別、同時、時間指定の振動と停止の最小例。", "path": "Samples~/Rumble" },
     { "displayName": "地面の振動", "description": "接地、地面の種類と移動速度を振動へ接続する例。", "path": "Samples~/GroundRumble" },
     { "displayName": "ゲームイベントの振動", "description": "発射、反動、被弾の振動と重なりの最小例。", "path": "Samples~/EventRumble" }
