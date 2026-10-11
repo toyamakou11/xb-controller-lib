@@ -4,6 +4,8 @@
 
 0.2.0 の対象は標準入力と振動です。リマッピング済みパドルは A/B/X/Y などの通常入力として扱います。独立パドルの受信は合格条件に含めません。
 
+Xbox Wireless Adapter は対応・検証対象外です。Issue #4 の実機検証は行わず、範囲変更として扱います。以前の USB-C と Bluetooth の実機成果は保持します。
+
 ## 2026年10月10日の整理
 
 | 検査 | 結果 |
@@ -27,7 +29,7 @@ GameInput probe は1台を列挙し、callback 診断 `0x00000000` を返しま�
 
 各モーターへ `0.25` を `700 ms` 要求しました。API の要求と停止は4モーターとも `0x00000000` でした。ユーザーは指定位置だけが振動し、要求後に停止したと確認しました。
 
-これは配布 DLL の GameInput probe と実機観察です。Unity Play の検証ではありません。USB-C試験時点では、firmware version、Bluetooth、Wireless Adapter、他機種、複数実機、IL2CPP Player、フォーカス喪失と切断時の停止は未検証でした。
+これは配布 DLL の GameInput probe と実機観察です。Unity Play の検証ではありません。USB-C試験時点では、firmware version、Bluetooth、他機種、複数実機、IL2CPP Player、フォーカス喪失と切断時の停止は未検証でした。
 
 ## 2026年10月11日のBluetooth振動実機確認
 
@@ -42,7 +44,7 @@ GameInput は1台を列挙し、読み取りエラーと callback 診断は `0x0
 | LeftTrigger | 左トリガーのみ | 停止 |
 | RightTrigger | 右トリガーのみ | 停止 |
 
-この試験は Bluetooth 接続でのネイティブ API 要求と物理応答です。Unity Play の結果ではありません。Xbox Wireless Adapter、他機種、firmware、複数実機、IL2CPP Player、フォーカス喪失と切断時の停止は未検証です。
+この試験は Bluetooth 接続でのネイティブ API 要求と物理応答です。Unity Play の結果ではありません。他機種、firmware、複数実機、IL2CPP Player、フォーカス喪失と切断時の停止は未検証です。
 
 ## 2026年10月11日の標準入力サンプル確認
 
@@ -120,6 +122,6 @@ Elite Series 2 Core / firmware 5.23.6.0 の USB-C 接続で、本体低周波、
 
 ## 未検証範囲
 
-2026年10月10日時点では、今回整理後 DLL の物理振動を再試験していません。Bluetooth / Wireless Adapter のモーター、実 Unity ウィンドウのフォーカス喪失、振動中の切断・終了、複数実機、他機種、IL2CPP Player は引き続き未検証です。
+2026年10月10日時点では、今回整理後 DLL の物理振動を再試験していません。Bluetooth のモーター、実 Unity ウィンドウのフォーカス喪失、振動中の切断・終了、複数実機、他機種、IL2CPP Player は引き続き未検証です。
 
 振動コードと標準入力の寿命処理は保持し、合成回帰で確認しました。GitHub Actions、機器設定変更、driver 導入は行っていません。

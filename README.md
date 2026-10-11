@@ -4,6 +4,8 @@ Unity の標準コントローラー入力と振動を共通 API で扱う UPM �
 
 Elite Series 2 のパドルは、Xbox Accessories で割り当てた A/B/X/Y などの通常入力として扱います。プロファイルを変更しません。
 
+Xbox Wireless Adapter は対応・検証対象外です。
+
 ## 導入
 
 Unity 6000.3 以降の Package Manager で「Install package from git URL」を選びます。

@@ -6,6 +6,8 @@ Unity でコントローラーを扱う実装負担を減らす。既存の Unit
 
 Xbox Accessories でリマッピングしたパドルは、割当先の通常ボタンとして読む。独立物理パドル、USB GIP raw report、WGI helper、vendor GATT は製品範囲に含めない。調査履歴は保存する。
 
+Xbox Wireless Adapter は対応・検証対象外とする。
+
 ## 受け入れ条件
 
 - UPM で導入し、Unity 6000.3 以降と Input System 1.19.0 でコンパイルできる。

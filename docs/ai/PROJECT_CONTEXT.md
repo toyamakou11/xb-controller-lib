@@ -2,7 +2,7 @@
 
 - Objective: Build an installable Unity UPM wrapper for standard controller input and rumble.
 - Scope: Reuse Unity Input System and GameInput. Treat remapped paddles as ordinary assigned buttons.
-- Exclusions: Independent paddle input, vendor GATT, USB raw reports, WGI helpers, driver changes, and automatic controller profile changes.
+- Exclusions: Independent paddle input, vendor GATT, USB raw reports, WGI helpers, Xbox Wireless Adapter support and validation, driver changes, and automatic controller profile changes.
 - Acceptance criteria: See docs/design.md. Independent paddle detection is not a completion requirement.
 - Versions: Unity 6000.3+, Input System 1.19.0, Microsoft.GameInput SDK 3.5.283, and GameInput v3 runtime for the Windows backend.
 - Architecture: C# facade; Unity Gamepad backend; Windows x64 C++17 GameInput bridge for input history and four-motor rumble.
