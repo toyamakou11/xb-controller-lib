@@ -34,7 +34,9 @@ std::uint64_t nextToken = 1;
 
 void StopOwnedRumble(Device& entry) noexcept {
     if (!entry.ownsRumble) return;
-    entry.device->SetRumbleState(nullptr);
+    // runtime 3.5.283 の null 停止での crash を回避する。
+    const GameInputRumbleParams stopped{};
+    entry.device->SetRumbleState(&stopped);
     entry.ownsRumble = false;
 }
 

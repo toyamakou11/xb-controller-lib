@@ -111,9 +111,10 @@ public:
     bool STDMETHODCALLTYPE IsForceFeedbackMotorPoweredOn(std::uint32_t) override { return false; }
     void STDMETHODCALLTYPE SetForceFeedbackMotorGain(std::uint32_t, float) override {}
     void STDMETHODCALLTYPE SetRumbleState(const GameInputRumbleParams* params) override {
+        Check(params != nullptr, "runtime互換のため停止は明示構造体を使う");
         ++rumbleCalls;
-        lastRumble = params ? *params : GameInputRumbleParams{};
-        if (!params || !(params->lowFrequency || params->highFrequency || params->leftTrigger || params->rightTrigger)) ++stopCalls;
+        lastRumble = *params;
+        if (!(params->lowFrequency || params->highFrequency || params->leftTrigger || params->rightTrigger)) ++stopCalls;
     }
     HRESULT STDMETHODCALLTYPE DirectInputEscape(std::uint32_t, const void*, std::uint32_t, void*, std::uint32_t, std::uint32_t*) override { return E_NOTIMPL; }
     HRESULT STDMETHODCALLTYPE CreateInputMapper(IGameInputMapper**) override { return E_NOTIMPL; }
