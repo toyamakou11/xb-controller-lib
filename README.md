@@ -41,6 +41,8 @@ public sealed class PlayerInputExample : MonoBehaviour
 
 `Tools → Xbox Controller → 入力診断` で接続、ボタン、軸、診断値を確認できます。Package Manager のサンプル「入力確認」も利用可能です。
 
+サンプル「標準入力のゲーム操作」は移動、視点、ボタン、LB/RB、LT/RT を示します。[導入と操作](Samples~/StandardInput/README.md) を参照してください。
+
 ## API
 
 | API | 内容 |

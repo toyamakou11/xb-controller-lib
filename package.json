@@ -7,5 +7,8 @@
   "dependencies": { "com.unity.inputsystem": "1.19.0" },
   "author": { "name": "toyamakou11" },
   "license": "GPL-3.0-only",
-  "samples": [{ "displayName": "入力確認", "description": "標準ボタンを読み取る最小例。", "path": "Samples~/InputMonitor" }]
+  "samples": [
+    { "displayName": "入力確認", "description": "標準ボタンを読み取る最小例。", "path": "Samples~/InputMonitor" },
+    { "displayName": "標準入力のゲーム操作", "description": "移動、視点、ボタン、肩ボタンとトリガーの最小例。", "path": "Samples~/StandardInput" }
+  ]
 }
